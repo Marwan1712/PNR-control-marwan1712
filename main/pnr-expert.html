@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNR Expert Decoder Pro</title>
+    <!-- Load React and Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            /* Subtle dot pattern background */
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 32px 32px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pnr-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .pnr-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.01);
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        /* Smooth transitions for interactive elements */
+        button,
+        textarea,
+        div {
+            transition: all 0.2s ease-out;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        // Icons
+        const PlaneIcon = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" /></svg>
+        );
+        const ClockIcon = () => (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+        );
+        const CheckIcon = () => (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        );
+        const CopyIcon = () => (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+        );
+        const UsersIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+        );
+        const LuggageIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="13" rx="3" /><path d="M9 7V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v3" /><path d="M9 21v1" /><path d="M15 21v1" /></svg>
+        );
+
+        const AIRLINE_NAMES = {
+            'AA': 'American Airlines', 'DL': 'Delta Air Lines', 'UA': 'United Airlines', 'WN': 'Southwest Airlines', 'B6': 'JetBlue Airways', 'AS': 'Alaska Airlines', 'NK': 'Spirit Airlines', 'F9': 'Frontier Airlines', 'HA': 'Hawaiian Airlines', 'AC': 'Air Canada', 'WS': 'WestJet', 'AM': 'Aeromexico', 'Y4': 'Volaris', 'PD': 'Porter Airlines', 'TS': 'Air Transat', 'G4': 'Allegiant Air', 'XP': 'Avelo Airlines', 'MX': 'Breeze Airways',
+            'BA': 'British Airways', 'LH': 'Lufthansa', 'AF': 'Air France', 'KL': 'KLM Royal Dutch Airlines', 'IB': 'Iberia', 'AZ': 'ITA Airways', 'LO': 'LOT Polish Airlines', 'LX': 'Swiss International Air Lines', 'OS': 'Austrian Airlines', 'SN': 'Brussels Airlines', 'TP': 'TAP Air Portugal', 'EI': 'Aer Lingus', 'FI': 'Icelandair', 'SK': 'Scandinavian Airlines', 'AY': 'Finnair', 'DY': 'Norwegian Air', 'FR': 'Ryanair', 'U2': 'EasyJet', 'W6': 'Wizz Air', 'TK': 'Turkish Airlines', 'PC': 'Pegasus Airlines', 'A3': 'Aegean Airlines', 'UX': 'Air Europa', 'JU': 'Air Serbia', 'EW': 'Eurowings', 'BT': 'airBaltic', 'RO': 'TAROM', 'FB': 'Bulgaria Air', 'KM': 'Air Malta', 'OK': 'Czech Airlines', 'OU': 'Croatia Airlines', 'V7': 'Volotea', 'VY': 'Vueling Airlines', 'HV': 'Transavia',
+            'EK': 'Emirates', 'QR': 'Qatar Airways', 'EY': 'Etihad Airways', 'WY': 'Oman Air', 'GF': 'Gulf Air', 'RJ': 'Royal Jordanian', 'SV': 'Saudia', 'FZ': 'Flydubai', 'G9': 'Air Arabia', 'KU': 'Kuwait Airways', 'ME': 'Middle East Airlines', 'ET': 'Ethiopian Airlines', 'MS': 'EgyptAir', 'AT': 'Royal Air Maroc', 'KQ': 'Kenya Airways', 'SA': 'South African Airways', 'WB': 'RwandAir', 'TC': 'Air Tanzania', 'XY': 'Flynas', 'J9': 'Jazeera Airways', 'TU': 'Tunisair', 'AH': 'Air Algerie',
+            'SQ': 'Singapore Airlines', 'CX': 'Cathay Pacific', 'KE': 'Korean Air', 'OZ': 'Asiana Airlines', 'NH': 'All Nippon Airways', 'JL': 'Japan Airlines', 'TG': 'Thai Airways', 'MH': 'Malaysia Airlines', 'VN': 'Vietnam Airlines', 'CI': 'China Airlines', 'BR': 'EVA Air', 'AI': 'Air India', 'UK': 'Vistara', '6E': 'IndiGo', 'SG': 'SpiceJet', 'CA': 'Air China', 'MU': 'China Eastern', 'CZ': 'China Southern', 'HU': 'Hainan Airlines', 'AK': 'AirAsia', 'QF': 'Qantas', 'VA': 'Virgin Australia', 'NZ': 'Air New Zealand', 'PR': 'Philippine Airlines', 'GA': 'Garuda Indonesia', 'KC': 'Air Astana', 'PG': 'Bangkok Airways', 'NX': 'Air Macau', 'IX': 'Air India Express', 'SC': 'Shandong Airlines', 'ZH': 'Shenzhen Airlines', 'MF': 'Xiamen Air', 'JQ': 'Jetstar',
+            'LA': 'LATAM Airlines', 'AV': 'Avianca', 'CM': 'Copa Airlines', 'AR': 'Aerolineas Argentinas', 'G3': 'GOL Linhas Aéreas', 'AD': 'Azul Brazilian', 'H2': 'Sky Airline', 'WJ': 'JetSmart', '9V': 'Avior Airlines', 'P5': 'Wingo',
+                // --- NORTH AMERICA (Regional & Low Cost) ---
+    'SY': 'Sun Country Airlines',
+    'F8': 'Flair Airlines',
+    '3M': 'Silver Airways',
+    '9K': 'Cape Air',
+    'JV': 'Bearskin Airlines',
+    '4N': 'Air North',
+    '5T': 'Canadian North',
+    'MO': 'Calm Air',
+    'KS': 'PenAir',
+    'II': 'Interjet (Defunct/Inactive)', // Kept for historical data often found in PNRs
+    'VB': 'VivaAerobus',
+
+    // --- EUROPE (Leisure, Regional & Long Haul) ---
+    'VS': 'Virgin Atlantic',
+    'DE': 'Condor',
+    'LS': 'Jet2.com',
+    'BY': 'TUI Airways',
+    'TB': 'TUI fly Belgium',
+    'OR': 'TUI fly Netherlands',
+    'TO': 'Transavia France',
+    'XQ': 'SunExpress',
+    'XC': 'Corendon Airlines',
+    'XR': 'Corendon Airlines Europe',
+    'EN': 'Air Dolomiti',
+    'WK': 'Edelweiss Air',
+    'LG': 'Luxair',
+    'KM': 'Air Malta', // Note: Ceased ops March 2024, replaced by KM Malta Airlines (KM)
+    'NT': 'Binter Canarias',
+    'S4': 'SATA Azores Airlines',
+    'SP': 'SATA Air Acores',
+    'GR': 'Aurigny',
+    'LM': 'Loganair',
+    'BM': 'bmi regional (Flybmi)',
+    'QS': 'Smartwings',
+    '0B': 'Blue Air',
+    'NO': 'Norse Atlantic Airways',
+    'N0': 'Norse Atlantic UK',
+    'D8': 'Norwegian Air International',
+    'KF': 'Air Belgium',
+    'A5': 'HOP!',
+    'YS': 'Regional Jet (Nordica)',
+    'W9': 'Wizz Air UK',
+
+    // --- MIDDLE EAST & ISRAEL ---
+    'LY': 'El Al Israel Airlines',
+    'IZ': 'Arkia',
+    '6H': 'Israir',
+    'IA': 'Iraqi Airways',
+    'IR': 'Iran Air',
+    'W5': 'Mahan Air',
+    'RB': 'Syrian Air',
+    'IY': 'Yemenia',
+    'LN': 'Libyan Airlines',
+    '8U': 'Afriqiyah Airways',
+    'SD': 'Sudan Airways',
+    'J2': 'Azerbaijan Airlines',
+    'HY': 'Uzbekistan Airways',
+    'T5': 'Turkmenistan Airlines',
+    'DV': 'SCAT Airlines',
+    'BS': 'US-Bangla Airlines',
+
+    // --- ASIA (China, Japan, Korea, SE Asia) ---
+    // China
+    '3U': 'Sichuan Airlines',
+    'GS': 'Tianjin Airlines',
+    'HO': 'Juneyao Airlines',
+    '9C': 'Spring Airlines',
+    'BK': 'Okay Airways',
+    '8L': 'Lucky Air',
+    'JD': 'Beijing Capital Airlines',
+    'KN': 'China United Airlines',
+    'EU': 'Chengdu Airlines',
+    'G5': 'China Express Airlines',
+    'NS': 'Hebei Airlines',
+    'TV': 'Tibet Airlines',
+    'KY': 'Kunming Airlines',
+    // Japan
+    'MM': 'Peach Aviation',
+    'GK': 'Jetstar Japan',
+    'BC': 'Skymark Airlines',
+    '7G': 'StarFlyer',
+    '6J': 'Solaseed Air',
+    'HD': 'Air Do',
+    'IJ': 'Spring Airlines Japan',
+    // Korea
+    '7C': 'Jeju Air',
+    'LJ': 'Jin Air',
+    'TW': 'T\'way Air',
+    'BX': 'Air Busan',
+    'RS': 'Air Seoul',
+    // SE Asia & India
+    '5J': 'Cebu Pacific',
+    'DG': 'Cebu Pacific (Cebgo)',
+    'Z2': 'Philippines AirAsia',
+    'VJ': 'VietJet Air',
+    'QH': 'Bamboo Airways',
+    'DD': 'Nok Air',
+    'SL': 'Thai Lion Air',
+    'VZ': 'Thai Vietjet Air',
+    'TR': 'Scoot',
+    'ID': 'Batik Air',
+    'OD': 'Batik Air Malaysia',
+    'QG': 'Citilink',
+    'SJ': 'Sriwijaya Air',
+    'JT': 'Lion Air',
+    'MI': 'SilkAir (Merged into SQ)',
+    'KB': 'Drukair Royal Bhutan',
+    'BG': 'Biman Bangladesh Airlines',
+    'RA': 'Nepal Airlines',
+    'H9': 'Himalaya Airlines',
+    'PK': 'Pakistan International Airlines',
+    'UL': 'SriLankan Airlines',
+    'I5': 'AIX Connect (AirAsia India)',
+
+    // --- OCEANIA & PACIFIC ---
+    'FJ': 'Fiji Airways',
+    'SB': 'Aircalin',
+    'TN': 'Air Tahiti Nui',
+    'VT': 'Air Tahiti',
+    'PX': 'Air Niugini',
+    'IE': 'Solomon Airlines',
+    'NF': 'Air Vanuatu',
+    'ZL': 'Rex (Regional Express)',
+    'TL': 'Air North (Australia)',
+    'QQ': 'Alliance Airlines',
+    '3K': 'Jetstar Asia',
+
+    // --- LATIN AMERICA & CARIBBEAN ---
+    'BW': 'Caribbean Airlines',
+    'KX': 'Cayman Airways',
+    'UP': 'Bahamasair',
+    'JY': 'InterCaribbean Airways',
+    'TX': 'Air Caraibes',
+    'SS': 'Corsair International',
+    'PY': 'Surinam Airways',
+    'OB': 'Boliviana de Aviacion (BoA)',
+    'ZP': 'Paranair',
+    '2Z': 'Voepass Linhas Aéreas',
+    'QL': 'LASER Airlines',
+    'VH': 'Aeropostal',
+    'R7': 'Aserca Airlines',
+    'XX': 'Major Airline (Generic Code)', // Often used in systems as placeholder
+
+    // --- AFRICA ---
+    'DT': 'TAAG Angola Airlines',
+    'TM': 'LAM Mozambique Airlines',
+    'MK': 'Air Mauritius',
+    'HM': 'Air Seychelles',
+    'UU': 'Air Austral',
+    'VR': 'Cabo Verde Airlines',
+    'BP': 'Air Botswana',
+    'SW': 'Air Namibia (Defunct)',
+    'QM': 'Air Malawi (Defunct)',
+    'HF': 'Air Cote d\'Ivoire',
+    'KP': 'ASKY Airlines',
+    'P4': 'Air Peace',
+    'W3': 'Arik Air',
+    'AW': 'Africa World Airlines',
+    
+        };
+
+        const AIRPORT_NAMES = {
+            'ATL': 'Atlanta Hartsfield-Jackson Intl Airport (ATL)', 'LAX': 'Los Angeles Intl Airport (LAX)', 'ORD': 'Chicago O\'Hare Intl Airport (ORD)', 'DFW': 'Dallas/Fort Worth Intl Airport (DFW)', 'DEN': 'Denver Intl Airport (DEN)', 'JFK': 'New York John F Kennedy Intl Airport (JFK)', 'SFO': 'San Francisco Intl Airport (SFO)', 'LAS': 'Las Vegas Harry Reid Intl Airport (LAS)', 'SEA': 'Seattle-Tacoma Intl Airport (SEA)', 'MCO': 'Orlando Intl Airport (MCO)', 'EWR': 'Newark Liberty Intl Airport (EWR)', 'CLT': 'Charlotte Douglas Intl Airport (CLT)', 'PHX': 'Phoenix Sky Harbor Intl Airport (PHX)', 'MIA': 'Miami Intl Airport (MIA)', 'IAH': 'Houston George Bush Intercntl (IAH)', 'FLL': 'Fort Lauderdale Hollywood (FLL)', 'LGA': 'New York LaGuardia (LGA)', 'BOS': 'Boston Logan Intl Airport (BOS)', 'MSP': 'Minneapolis-St. Paul Intl Airport (MSP)', 'DTW': 'Detroit Metropolitan (DTW)', 'PHL': 'Philadelphia Intl Airport (PHL)', 'BWI': 'Baltimore/Washington Intl (BWI)', 'SLC': 'Salt Lake City Intl Airport (SLC)', 'SAN': 'San Diego Intl Airport (SAN)', 'IAD': 'Washington Dulles Airport (IAD)', 'DCA': 'Reagan Washington National (DCA)', 'TPA': 'Tampa Intl Airport (TPA)', 'PDX': 'Portland Intl Airport (PDX)', 'STL': 'St. Louis Lambert Intl Airport (STL)', 'BNA': 'Nashville Intl Airport (BNA)', 'AUS': 'Austin-Bergstrom Intl Airport (AUS)', 'SJC': 'San Jose Mineta Intl Airport (SJC)', 'SNA': 'Orange County John Wayne (SNA)', 'DAL': 'Dallas Love Field (DAL)', 'HOU': 'Houston William P. Hobby (HOU)', 'RDU': 'Raleigh-Durham Intl Airport (RDU)', 'MSY': 'New Orleans Louis Armstrong (MSY)', 'MCI': 'Kansas City Intl Airport (MCI)', 'CLE': 'Cleveland Hopkins Intl (CLE)', 'OAK': 'Oakland Intl Airport (OAK)', 'SMF': 'Sacramento Intl Airport (SMF)', 'SJU': 'San Juan Luis Munoz Marin (SJU)', 'ONT': 'Ontario Intl Airport (ONT)', 'ANC': 'Anchorage Ted Stevens Intl (ANC)', 'SAT': 'San Antonio Intl Airport (SAT)', 'PBI': 'West Palm Beach Intl (PBI)', 'RSW': 'Southwest Florida Intl (RSW)', 'IND': 'Indianapolis Intl Airport (IND)', 'CVG': 'Cincinnati/Northern Kentucky (CVG)', 'RNO': 'Reno-Tahoe Intl Airport (RNO)', 'BUR': 'Burbank Hollywood Burbank (BUR)', 'ABQ': 'Albuquerque Sunport (ABQ)', 'BUF': 'Buffalo Niagara Intl Airport (BUF)', 'BDL': 'Bradley Intl Airport (BDL)', 'MEM': 'Memphis Intl Airport (MEM)', 'RIC': 'Richmond Intl Airport (RIC)', 'CHS': 'Charleston Intl Airport (CHS)', 'PVD': 'Providence T.F. Green (PVD)', 'SAV': 'Savannah/Hilton Head (SAV)', 'ORF': 'Norfolk Intl Airport (ORF)', 'OKC': 'Oklahoma City Will Rogers (OKC)', 'HNL': 'Honolulu Daniel K. Inouye (HNL)', 'OGG': 'Kahului Airport (OGG)', 'KOA': 'Kona Intl Airport (KOA)', 'LIH': 'Lihue Airport (LIH)', 'ALB': 'Albany Intl Airport (ALB)', 'AMA': 'Amarillo Rick Husband Intl (AMA)', 'ASE': 'Aspen/Pitkin County (ASE)', 'AVL': 'Asheville Regional (AVL)', 'AZA': 'Phoenix-Mesa Gateway (AZA)', 'BFL': 'Bakersfield Meadows Field (BFL)', 'BGM': 'Greater Binghamton (BGM)', 'BGR': 'Bangor Intl Airport (BGR)', 'BHM': 'Birmingham-Shuttlesworth Intl (BHM)', 'BIL': 'Billings Logan Intl Airport (BIL)', 'BIS': 'Bismarck Municipal (BIS)', 'BMI': 'Bloomington Central Illinois (BMI)', 'BOI': 'Boise Airport (BOI)', 'BTR': 'Baton Rouge Metropolitan (BTR)', 'BTV': 'Burlington Intl Airport (BTV)', 'BZN': 'Bozeman Yellowstone Intl (BZN)', 'CAE': 'Columbia Metropolitan (CAE)', 'CAK': 'Akron-Canton Airport (CAK)', 'CHA': 'Chattanooga Metropolitan (CHA)', 'CHO': 'Charlottesville–Albemarle (CHO)', 'CID': 'Cedar Rapids Eastern Iowa (CID)', 'COS': 'Colorado Springs (COS)', 'CRP': 'Corpus Christi Intl Airport (CRP)', 'CRW': 'Charleston Yeager (CRW)', 'DAY': 'Dayton Intl Airport (DAY)', 'DSM': 'Des Moines Intl Airport (DSM)', 'ELP': 'El Paso Intl Airport (ELP)', 'EUG': 'Eugene Airport (EUG)', 'EVV': 'Evansville Regional (EVV)', 'EWN': 'New Bern Coastal Carolina (EWN)', 'EYW': 'Key West Intl Airport (EYW)', 'FAI': 'Fairbanks Intl Airport (FAI)', 'FAT': 'Fresno Yosemite Intl Airport (FAT)', 'FAY': 'Fayetteville Regional (FAY)', 'FLG': 'Flagstaff Pulliam (FLG)', 'FNT': 'Flint Bishop Intl Airport (FNT)', 'FSD': 'Sioux Falls Regional (FSD)', 'FWA': 'Fort Wayne Intl Airport (FWA)', 'GEG': 'Spokane Intl Airport (GEG)', 'GJT': 'Grand Junction Regional (GJT)', 'GRB': 'Green Bay Austin Straubel (GRB)', 'GRR': 'Grand Rapids Gerald R. Ford (GRR)', 'GSO': 'Greensboro Piedmont Triad (GSO)', 'GSP': 'Greenville-Spartanburg Intl (GSP)', 'GTF': 'Great Falls Intl Airport (GTF)', 'GUM': 'Guam Antonio B. Won Pat (GUM)', 'GPT': 'Gulfport-Biloxi Intl Airport (GPT)', 'HSV': 'Huntsville Intl Airport (HSV)', 'ISP': 'Long Island MacArthur (ISP)', 'ITO': 'Hilo Intl Airport (ITO)', 'JAC': 'Jackson Hole Airport (JAC)', 'JAN': 'Jackson-Evers Intl (JAN)', 'JAX': 'Jacksonville Intl Airport (JAX)', 'LAN': 'Lansing Capital Region (LAN)', 'LEX': 'Lexington Blue Grass (LEX)', 'LIT': 'Little Rock Bill and Hillary Clinton (LIT)', 'LNK': 'Lincoln Airport (LNK)', 'MAF': 'Midland Intl Airport (MAF)', 'MBS': 'Saginaw MBS Intl Airport (MBS)', 'MDT': 'Harrisburg Intl Airport (MDT)', 'MFE': 'McAllen Miller Intl Airport (MFE)', 'MFR': 'Medford Rogue Valley Intl (MFR)', 'MHT': 'Manchester-Boston Regional (MHT)', 'MLB': 'Melbourne Orlando Intl (MLB)', 'MOB': 'Mobile Regional (MOB)', 'MSN': 'Madison Dane County Regional (MSN)', 'MSO': 'Missoula Montana Rail Link (MSO)', 'MYR': 'Myrtle Beach Intl Airport (MYR)', 'OMA': 'Omaha Eppley Airfield (OMA)', 'ORH': 'Worcester Regional (ORH)', 'PAE': 'Everett Paine Field (PAE)', 'PHF': 'Newport News/Williamsburg (PHF)', 'PIA': 'Peoria General Wayne A. Downing (PIA)', 'PIT': 'Pittsburgh Intl Airport (PIT)', 'PNS': 'Pensacola Intl Airport (PNS)', 'PSC': 'Pasco Tri-Cities (PSC)', 'PSP': 'Palm Springs Intl Airport (PSP)', 'PWM': 'Portland Intl Jetport (PWM)', 'RAP': 'Rapid City Regional (RAP)', 'ROC': 'Rochester Frederick Douglass (ROC)', 'SBP': 'San Luis Obispo County (SBP)', 'SBA': 'Santa Barbara Municipal (SBA)', 'SBN': 'South Bend Intl Airport (SBN)', 'SDF': 'Louisville Muhammad Ali Intl (SDF)', 'SRQ': 'Sarasota-Bradenton Intl (SRQ)', 'SYR': 'Syracuse Hancock Intl (SYR)', 'TLH': 'Tallahassee Intl Airport (TLH)', 'TUL': 'Tulsa Intl Airport (TUL)', 'TUS': 'Tucson Intl Airport (TUS)', 'TVC': 'Traverse City Cherry Capital (TVC)', 'TYS': 'Knoxville McGhee Tyson (TYS)', 'VLD': 'Valdosta Regional (VLD)', 'VPS': 'Destin-Fort Walton Beach (VPS)', 'XNA': 'Northwest Arkansas Natl (XNA)', 'YUM': 'Yuma Intl Airport (YUM)',
+            'YYZ': 'Toronto Lester B. Pearson Airport (YYZ)', 'YVR': 'Vancouver Intl Airport (YVR)', 'YUL': 'Montreal / Pierre Elliott Trudeau Intl Airport (YUL)', 'YYC': 'Calgary Intl Airport (YYC)', 'YOW': 'Ottawa Macdonald-Cartier (YOW)', 'YEG': 'Edmonton Intl Airport (YEG)', 'YWG': 'Winnipeg Richardson Intl (YWG)', 'YHZ': 'Halifax Stanfield Intl (YHZ)', 'YQB': 'Quebec City Jean Lesage Intl (YQB)', 'YLW': 'Kelowna Intl Airport (YLW)', 'YXE': 'Saskatoon Diefenbaker (YXE)', 'YQR': 'Regina Intl Airport (YQR)', 'YXU': 'London Intl Airport (YXU)', 'YYJ': 'Victoria Intl Airport (YYJ)', 'YSJ': 'Saint John Airport (YSJ)', 'YQM': 'Moncton Greater Moncton Intl (YQM)', 'YQT': 'Thunder Bay Intl Airport (YQT)', 'YMM': 'Fort McMurray Intl (YMM)', 'YFC': 'Fredericton Intl Airport (YFC)', 'YYT': 'St. John\'s Intl Airport (YYT)', 'YYG': 'Charlottetown Airport (YYG)', 'YZF': 'Yellowknife Airport (YZF)', 'YXY': 'Whitehorse Erik Nielsen Intl (YXY)', 'YFB': 'Iqaluit Airport (YFB)', 'YXS': 'Prince George Intl (YXS)', 'YKA': 'Kamloops Airport (YKA)', 'YPR': 'Prince Rupert Airport (YPR)', 'YQQ': 'Comox Valley Airport (YQQ)', 'YAM': 'Sault Ste. Marie (YAM)', 'YSB': 'Sudbury Airport (YSB)', 'YTS': 'Timmins Victor M. Power (YTS)', 'YTZ': 'Toronto Billy Bishop City (YTZ)', 'YKF': 'Kitchener-Waterloo (YKF)', 'YHM': 'Hamilton John C. Munro (YHM)', 'YXX': 'Abbotsford Intl Airport (YXX)', 'YCD': 'Nanaimo Airport (YCD)', 'YCG': 'Castlegar West Kootenay (YCG)', 'YXC': 'Cranbrook/Canadian Rockies (YXC)', 'YXJ': 'Fort St. John (YXJ)', 'YQU': 'Grande Prairie (YQU)', 'YQL': 'Lethbridge Airport (YQL)', 'YXH': 'Medicine Hat (YXH)', 'YPA': 'Prince Albert Glass Field (YPA)', 'YBR': 'Brandon Municipal (YBR)', 'YGK': 'Kingston Norman Rogers (YGK)', 'YXR': 'Earlton (YXR)', 'YUY': 'Rouyn-Noranda (YUY)', 'YVO': 'Val-d\'Or (YVO)', 'YGW': 'Kuujjuarapik (YGW)', 'YVP': 'Kuujjuaq (YVP)', 'YGR': 'Iles-de-la-Madeleine (YGR)', 'YGP': 'Gaspe (YGP)', 'YYY': 'Mont-Joli (YYY)', 'YBC': 'Baie-Comeau (YBC)', 'YZV': 'Sept-Iles (YZV)', 'YAY': 'St. Anthony (YAY)', 'YDF': 'Deer Lake (YDF)', 'YQX': 'Gander Intl Airport (YQX)', 'YYR': 'Goose Bay (YYR)', 'YEV': 'Inuvik Mike Zubko (YEV)', 'YCB': 'Cambridge Bay (YCB)', 'YRT': 'Rankin Inlet (YRT)',
+            'MEX': 'Mexico City Intl Airport (MEX)', 'CUN': 'Cancun Intl Airport (CUN)', 'GDL': 'Guadalajara Intl (GDL)', 'MTY': 'Monterrey Intl Airport (MTY)', 'PVR': 'Puerto Vallarta Lic. Gustavo Diaz Ordaz (PVR)', 'SJD': 'San Jose del Cabo Los Cabos Intl (SJD)', 'TIJ': 'Tijuana Rodriguez Intl (TIJ)', 'CJS': 'Ciudad Juarez Abraham Gonzalez (CJS)', 'MID': 'Merida Manuel Crescencio Rejon (MID)', 'BJX': 'Leon/Guanajuato Del Bajio (BJX)', 'CUL': 'Culiacan Federal de Bachigualato (CUL)', 'HMO': 'Hermosillo General Ignacio Pesqueira (HMO)', 'VER': 'Veracruz General Heriberto Jara (VER)', 'VSA': 'Villahermosa Carlos Rovirosa Perez (VSA)', 'OAX': 'Oaxaca Xoxocotlan Intl (OAX)', 'ACA': 'Acapulco Juan N. Alvarez (ACA)', 'MZT': 'Mazatlan General Rafael Buelna (MZT)', 'CZM': 'Cozumel Intl Airport (CZM)', 'ZLO': 'Manzanillo Playa de Oro (ZLO)', 'ZIH': 'Ixtapa-Zihuatanejo Intl (ZIH)', 'MLM': 'Morelia General Francisco Mujica (MLM)', 'QRO': 'Queretaro Intercontinental (QRO)', 'SLP': 'San Luis Potosi Ponciano Arriaga (SLP)', 'TGZ': 'Tuxtla Gutierrez Angel Albino Corzo (TGZ)',
+            'LHR': 'London Heathrow (LHR)', 'LGW': 'London Gatwick (LGW)', 'STN': 'London Stansted (STN)', 'LTN': 'London Luton (LTN)', 'MAN': 'Manchester Airport (MAN)', 'BHX': 'Birmingham Airport (BHX)', 'EDI': 'Edinburgh Airport (EDI)', 'CDG': 'Paris Charles de Gaulle (CDG)', 'ORY': 'Paris Orly (ORY)', 'NCE': 'Nice Cote d\'Azur (NCE)', 'FRA': 'Frankfurt Airport (FRA)', 'MUC': 'Munich Airport (MUC)', 'HAM': 'Hamburg Airport (HAM)', 'DUS': 'Dusseldorf Airport (DUS)', 'AMS': 'Amsterdam Schiphol (AMS)', 'MAD': 'Madrid Adolfo Suarez-Barajas (MAD)', 'BCN': 'Barcelona El Prat (BCN)', 'AGP': 'Malaga Airport (AGP)', 'PMI': 'Palma de Mallorca (PMI)', 'IST': 'Istanbul Airport (IST)', 'SAW': 'Istanbul Sabiha Gokcen (SAW)', 'AYT': 'Antalya Airport (AYT)', 'FCO': 'Rome Leonardo da Vinci-Fiumicino (FCO)', 'MXP': 'Milan Malpensa (MXP)', 'LIN': 'Milan Linate (LIN)', 'VCE': 'Venice Marco Polo (VCE)', 'ZRH': 'Zurich Airport (ZRH)', 'GVA': 'Geneva Airport (GVA)', 'CPH': 'Copenhagen Airport (CPH)', 'OSL': 'Oslo Gardermoen (OSL)', 'ARN': 'Stockholm Arlanda (ARN)', 'WAW': 'Warsaw Chopin (WAW)', 'VIE': 'Vienna Intl Airport (VIE)', 'ATH': 'Athens Intl Airport (ATH)', 'LIS': 'Lisbon Humberto Delgado (LIS)', 'OPO': 'Porto Airport (OPO)', 'DUB': 'Dublin Airport (DUB)', 'BRU': 'Brussels Airport (BRU)', 'CRL': 'Brussels South Charleroi (CRL)', 'PRG': 'Prague Vaclav Havel (PRG)', 'BUD': 'Budapest Ferenc Liszt (BUD)', 'HEL': 'Helsinki-Vantaa Airport (HEL)', 'BER': 'Berlin Brandenburg (BER)',
+            'DXB': 'Dubai Intl Airport (DXB)', 'DWC': 'Dubai Al Maktoum Intl (DWC)', 'DOH': 'Doha Hamad Intl Airport (DOH)', 'AUH': 'Abu Dhabi Intl Airport (AUH)', 'RUH': 'Riyadh King Khalid Intl (RUH)', 'JED': 'Jeddah King Abdulaziz Intl (JED)', 'DMM': 'Dammam King Fahd Intl (DMM)', 'AMM': 'Amman Queen Alia Intl (AMM)', 'MCT': 'Muscat Intl Airport (MCT)', 'KWI': 'Kuwait Intl Airport (KWI)', 'BAH': 'Bahrain Intl Airport (BAH)', 'BEY': 'Beirut-Rafic Hariri Intl (BEY)', 'CAI': 'Cairo Intl Airport (CAI)', 'JNB': 'Johannesburg O.R. Tambo (JNB)', 'CPT': 'Cape Town Intl Airport (CPT)', 'NBO': 'Nairobi Jomo Kenyatta (NBO)', 'ADD': 'Addis Ababa Bole Intl (ADD)', 'CMN': 'Casablanca Mohammed V (CMN)', 'LOS': 'Lagos Murtala Muhammed (LOS)',
+            'HND': 'Tokyo Haneda (HND)', 'NRT': 'Tokyo Narita (NRT)', 'KIX': 'Osaka Kansai (KIX)', 'ITM': 'Osaka Itami (ITM)', 'NGO': 'Nagoya Chubu Centrair (NGO)', 'ICN': 'Seoul Incheon Intl Airport (ICN)', 'GMP': 'Seoul Gimpo Intl Airport (GMP)', 'PUS': 'Busan Gimhae Intl (PUS)', 'SIN': 'Singapore Changi (SIN)', 'HKG': 'Hong Kong Intl Airport (HKG)', 'BKK': 'Bangkok Suvarnabhumi (BKK)', 'DMK': 'Bangkok Don Mueang (DMK)', 'HKT': 'Phuket Intl Airport (HKT)', 'CNX': 'Chiang Mai Intl Airport (CNX)', 'TPE': 'Taipei Taoyuan Intl Airport (TPE)', 'TSA': 'Taipei Songshan (TSA)', 'PVG': 'Shanghai Pudong Intl (PVG)', 'SHA': 'Shanghai Hongqiao Intl (SHA)', 'PEK': 'Beijing Capital Intl (PEK)', 'PKX': 'Beijing Daxing Intl (PKX)', 'CAN': 'Guangzhou Baiyun Intl (CAN)', 'SZX': 'Shenzhen Bao\'an Intl (SZX)', 'CTU': 'Chengdu Shuangliu (CTU)', 'TFU': 'Chengdu Tianfu (TFU)', 'KMG': 'Kunming Changshui (KMG)', 'SGN': 'Ho Chi Minh City Tan Son Nhat (SGN)', 'HAN': 'Hanoi Noi Bai Intl Airport (HAN)', 'DAD': 'Da Nang Intl Airport (DAD)', 'MNL': 'Manila Ninoy Aquino Intl (MNL)', 'CRK': 'Clark Intl Airport (CRK)', 'CEB': 'Mactan-Cebu Intl Airport (CEB)', 'DEL': 'Delhi Indira Gandhi Airport (DEL)', 'BOM': 'Mumbai Chhatrapati Shivaji (BOM)', 'BLR': 'Bangalore Kempegowda Intl (BLR)', 'MAA': 'Chennai Intl Airport (MAA)', 'HYD': 'Hyderabad Rajiv Gandhi Intl (HYD)', 'CCU': 'Kolkata Netaji Subhas Chandra (CCU)', 'KTM': 'Kathmandu Tribhuvan Intl (KTM)', 'KUL': 'Kuala Lumpur Intl (KUL)', 'CGK': 'Jakarta Soekarno-Hatta (CGK)', 'DPS': 'Bali Ngurah Rai (DPS)', 'SYD': 'Sydney Kingsford Smith (SYD)', 'MEL': 'Melbourne Airport (MEL)', 'BNE': 'Brisbane Airport (BNE)', 'PER': 'Perth Airport (PER)', 'ADL': 'Adelaide Airport (ADL)', 'AKL': 'Auckland Airport (AKL)', 'CHC': 'Christchurch Airport (CHC)', 'IFN': 'Esfahan Shahid Beheshti International Airport (IFN)',
+            'GRU': 'Sao Paulo Guarulhos Intl (GRU)', 'CGH': 'Sao Paulo Congonhas (CGH)', 'GIG': 'Rio de Janeiro Galeao Intl (GIG)', 'SDU': 'Rio de Janeiro Santos Dumont (SDU)', 'BOG': 'Bogota El Dorado Intl Airport (BOG)', 'SCL': 'Santiago Arturo Merino Benitez (SCL)', 'EZE': 'Buenos Aires Ministro Pistarini (EZE)', 'AEP': 'Buenos Aires Jorge Newbery (AEP)', 'LIM': 'Lima Jorge Chavez Intl Airport (LIM)', 'UIO': 'Quito Mariscal Sucre Intl (UIO)', 'CCS': 'Caracas Simon Bolivar (CCS)', 'LGB': 'Long Beach Airport (LGB)', 'HPN': 'Westchester County Airport (HPN)', 'ICT': 'Wichita Dwight D. Eisenhower National (ICT)', 'ABE': 'Lehigh Valley Intl Airport (ABE)', 'AVP': 'Wilkes-Barre/Scranton Intl (AVP)', 'SFB': 'Orlando Sanford Intl Airport (SFB)', 'PIE': 'St. Pete-Clearwater Intl (PIE)', 'DAB': 'Daytona Beach Intl Airport (DAB)', 'ECP': 'Northwest Florida Beaches Intl (ECP)', 'AGS': 'Augusta Regional Airport (AGS)', 'ILM': 'Wilmington Intl Airport (ILM)', 'OAJ': 'Albert J. Ellis Airport (OAJ)', 'TOL': 'Eugene F. Kranz Toledo Express (TOL)', 'LCK': 'Rickenbacker Intl Airport (LCK)', 'MLI': 'Quad Cities Intl Airport (MLI)', 'CMI': 'University of Illinois Willard (CMI)', 'ATW': 'Appleton Intl Airport (ATW)', 'DLH': 'Duluth Intl Airport (DLH)', 'RST': 'Rochester Intl Airport (RST)', 'MOT': 'Minot Intl Airport (MOT)', 'GFK': 'Grand Forks Intl Airport (GFK)', 'FAR': 'Hector Intl Airport (FAR)', 'HLN': 'Helena Regional Airport (HLN)', 'BTM': 'Bert Mooney Airport (BTM)', 'IDA': 'Idaho Falls Regional (IDA)', 'PIH': 'Pocatello Regional (PIH)', 'LWS': 'Lewiston-Nez Perce County (LWS)', 'PUW': 'Pullman-Moscow Regional (PUW)', 'ALW': 'Walla Walla Regional (ALW)', 'EAT': 'Pangborn Memorial Airport (EAT)', 'YKM': 'Yakima Air Terminal (YKM)', 'RDM': 'Redmond Municipal Airport (RDM)', 'OTH': 'Southwest Oregon Regional (OTH)', 'ACV': 'California Redwood Coast (ACV)', 'STS': 'Charles M. Schulz-Sonoma County (STS)', 'MRY': 'Monterey Regional Airport (MRY)', 'SCK': 'Stockton Metropolitan (SCK)', 'MCE': 'Merced Yosemite Regional (MCE)', 'MOD': 'Modesto City-County (MOD)', 'LBB': 'Lubbock Preston Smith Intl (LBB)', 'ABI': 'Abilene Regional Airport (ABI)', 'SPS': 'Wichita Falls Municipal (SPS)', 'TYR': 'Tyler Pounds Regional (TYR)', 'GGG': 'East Texas Regional (GGG)', 'BPT': 'Jack Brooks Regional (BPT)', 'LCH': 'Lake Charles Regional (LCH)', 'LFT': 'Lafayette Regional (LFT)', 'AEX': 'Alexandria Intl Airport (AEX)', 'MLU': 'Monroe Regional Airport (MLU)', 'SHV': 'Shreveport Regional (SHV)', 'TXK': 'Texarkana Regional (TXK)', 'FSM': 'Fort Smith Regional (FSM)', 'TRI': 'Tri-Cities Airport (TRI)', 'MGM': 'Montgomery Regional (MGM)', 'DHN': 'Dothan Regional (DHN)', 'PIB': 'Hattiesburg-Laurel Regional (PIB)', 'MEI': 'Meridian Regional (MEI)', 'GTR': 'Golden Triangle Regional (GTR)', 'ROA': 'Roanoke-Blacksburg Regional (ROA)', 'LYH': 'Lynchburg Regional (LYH)', 'HTS': 'Tri-State Airport (HTS)', 'CKB': 'North Central West Virginia (CKB)', 'MGW': 'Morgantown Municipal (MGW)', 'ERI': 'Erie Intl Airport (ERI)', 'UNV': 'University Park Airport (UNV)', 'IPT': 'Williamsport Regional (IPT)', 'HVN': 'Tweed New Haven Airport (HVN)', 'ACY': 'Atlantic City Intl Airport (ACY)', 'TTN': 'Trenton-Mercer Airport (TTN)', 'ILG': 'Wilmington Airport (ILG)', 'SWF': 'New York Stewart Intl (SWF)', 'ACK': 'Nantucket Memorial (ACK)', 'MVY': 'Martha\'s Vineyard Airport (MVY)', 'HYA': 'Barnstable Municipal (HYA)', 'PVC': 'Provincetown Municipal (PVC)', 'LEB': 'Lebanon Municipal (LEB)', 'AUG': 'Augusta State Airport (AUG)', 'RKD': 'Knox County Regional (RKD)', 'BHB': 'Hancock County-Bar Harbor (BHB)', 'PQI': 'Presque Isle Intl (PQI)',
+            'GLA': 'Glasgow Airport (GLA)', 'LCY': 'London City Airport (LCY)', 'BRS': 'Bristol Airport (BRS)', 'LPL': 'Liverpool John Lennon Airport (LPL)', 'NCL': 'Newcastle Intl Airport (NCL)', 'BFS': 'Belfast Intl Airport (BFS)', 'BHD': 'George Best Belfast City (BHD)', 'ABZ': 'Aberdeen Intl Airport (ABZ)', 'SOU': 'Southampton Airport (SOU)', 'EMA': 'East Midlands Airport (EMA)', 'LBA': 'Leeds Bradford Airport (LBA)', 'SNN': 'Shannon Airport (SNN)', 'ORK': 'Cork Airport (ORK)', 'LYS': 'Lyon-Saint Exupery Airport (LYS)', 'MRS': 'Marseille Provence Airport (MRS)', 'BOD': 'Bordeaux-Merignac Airport (BOD)', 'TLS': 'Toulouse-Blagnac Airport (TLS)', 'NTE': 'Nantes Atlantique Airport (NTE)', 'BSL': 'EuroAirport Basel Mulhouse Freiburg (BSL)', 'SXB': 'Strasbourg Airport (SXB)', 'LIL': 'Lille Airport (LIL)', 'STR': 'Stuttgart Airport (STR)', 'CGN': 'Cologne Bonn Airport (CGN)', 'HAJ': 'Hannover Airport (HAJ)', 'NUE': 'Albrecht Durer Nuremberg (NUE)', 'LEJ': 'Leipzig/Halle Airport (LEJ)', 'BRE': 'Bremen Airport (BRE)', 'DTM': 'Dortmund Airport (DTM)', 'NAP': 'Naples Intl Airport (NAP)', 'CTA': 'Catania-Fontanarossa Airport (CTA)', 'PMO': 'Falcone Borsellino Airport (PMO)', 'BLQ': 'Bologna Guglielmo Marconi (BLQ)', 'TRN': 'Turin Airport (TRN)', 'VRN': 'Verona Villafranca Airport (VRN)', 'PSA': 'Pisa Intl Airport (PSA)', 'BGY': 'Milan Bergamo Airport (BGY)', 'CIA': 'Rome Ciampino Airport (CIA)', 'CAG': 'Cagliari Elmas Airport (CAG)', 'OLB': 'Olbia Costa Smeralda (OLB)', 'ALC': 'Alicante-Elche Airport (ALC)', 'VLC': 'Valencia Airport (VLC)', 'IBZ': 'Ibiza Airport (IBZ)', 'MAH': 'Menorca Airport (MAH)', 'BIO': 'Bilbao Airport (BIO)', 'SVQ': 'Seville Airport (SVQ)', 'SCQ': 'Santiago de Compostela (SCQ)', 'TFS': 'Tenerife South Airport (TFS)', 'TFN': 'Tenerife North Airport (TFN)', 'LPA': 'Gran Canaria Airport (LPA)', 'ACE': 'Cesar Manrique-Lanzarote (ACE)', 'FUE': 'Fuerteventura Airport (FUE)', 'FAO': 'Faro Airport (FAO)', 'FNC': 'Madeira Airport (FNC)', 'PDL': 'Joao Paulo II Airport (PDL)', 'ZAG': 'Zagreb Franjo Tudman (ZAG)', 'SPU': 'Split Airport (SPU)', 'DBV': 'Dubrovnik Airport (DBV)', 'BEG': 'Belgrade Nikola Tesla (BEG)', 'SOF': 'Sofia Airport (SOF)', 'OTP': 'Bucharest Henri Coanda (OTP)', 'KBP': 'Boryspil Intl Airport (KBP)', 'KRK': 'Krakow John Paul II (KRK)', 'GDN': 'Gdansk Lech Walesa (GDN)', 'RIX': 'Riga Intl Airport (RIX)', 'TLL': 'Tallinn Airport (TLL)', 'VNO': 'Vilnius Airport (VNO)', 'KEF': 'Keflavik Intl Airport (KEF)', 'LUX': 'Luxembourg Airport (LUX)', 'MLA': 'Malta Intl Airport (MLA)', 'LCA': 'Larnaca Intl Airport (LCA)', 'PFO': 'Paphos Intl Airport (PFO)', 'ADB': 'Izmir Adnan Menderes (ADB)', 'ESB': 'Ankara Esenboga Airport (ESB)', 'DLM': 'Dalaman Airport (DLM)', 'BJV': 'Milas-Bodrum Airport (BJV)',
+            'SHJ': 'Sharjah Intl Airport (SHJ)', 'RKT': 'Ras Al Khaimah Intl (RKT)', 'SLL': 'Salalah Airport (SLL)', 'MED': 'Prince Mohammad Bin Abdulaziz (MED)', 'BGW': 'Baghdad Intl Airport (BGW)', 'EBL': 'Erbil Intl Airport (EBL)', 'IKA': 'Tehran Imam Khomeini (IKA)', 'THR': 'Mehrabad Intl Airport (THR)', 'SYZ': 'Shiraz Intl Airport (SYZ)', 'MHD': 'Mashhad Intl Airport (MHD)', 'TBZ': 'Tabriz Intl Airport (TBZ)', 'TLV': 'Ben Gurion Airport (TLV)',
+            'DUR': 'King Shaka Intl Airport (DUR)', 'TUN': 'Tunis-Carthage Intl (TUN)', 'ALG': 'Houari Boumediene Airport (ALG)', 'RAK': 'Marrakesh Menara Airport (RAK)', 'KGL': 'Kigali Intl Airport (KGL)', 'EBB': 'Entebbe Intl Airport (EBB)', 'DAR': 'Julius Nyerere Intl (DAR)', 'ZNZ': 'Abeid Amani Karume Intl (ZNZ)', 'LUN': 'Kenneth Kaunda Intl (LUN)', 'HRE': 'Robert Gabriel Mugabe Intl (HRE)', 'ACC': 'Kotoka Intl Airport (ACC)', 'DKR': 'Blaise Diagne Intl (DKR)', 'ABJ': 'Felix Houphouet-Boigny (ABJ)', 'MRU': 'Sir Seewoosagur Ramgoolam (MRU)', 'SEZ': 'Seychelles Intl Airport (SEZ)', 'HRG': 'Hurghada Intl Airport (HRG)', 'SSH': 'Sharm El Sheikh Intl (SSH)', 'LXR': 'Luxor Intl Airport (LXR)',
+            'FUK': 'Fukuoka Airport (FUK)', 'CTS': 'New Chitose Airport (CTS)', 'OKA': 'Naha Airport (OKA)', 'XIY': 'Xi\'an Xianyang Intl (XIY)', 'HGH': 'Hangzhou Xiaoshan Intl (HGH)', 'XMN': 'Xiamen Gaoqi Intl (XMN)', 'WUH': 'Wuhan Tianhe Intl (WUH)', 'CKG': 'Chongqing Jiangbei Intl (CKG)', 'CSX': 'Changsha Huanghua Intl (CSX)', 'TAO': 'Qingdao Jiaodong Intl (TAO)', 'SHE': 'Shenyang Taoxian Intl (SHE)', 'DLC': 'Dalian Zhoushuizi Intl (DLC)', 'COK': 'Cochin Intl Airport (COK)', 'AMD': 'Sardar Vallabhbhai Patel (AMD)', 'GOI': 'Dabolim Airport (GOI)', 'GOX': 'Manohar Intl Airport (GOX)', 'TRV': 'Thiruvananthapuram Intl (TRV)', 'PNQ': 'Pune Airport (PNQ)', 'JAI': 'Jaipur Intl Airport (JAI)', 'ATQ': 'Sri Guru Ram Dass Jee (ATQ)', 'USM': 'Samui Airport (USM)', 'KBV': 'Krabi Intl Airport (KBV)', 'PEN': 'Penang Intl Airport (PEN)', 'BKI': 'Kota Kinabalu Intl (BKI)', 'KCH': 'Kuching Intl Airport (KCH)', 'SUB': 'Juanda Intl Airport (SUB)', 'KNO': 'Kualanamu Intl Airport (KNO)', 'REP': 'Siem Reap-Angkor Intl (REP)', 'PNH': 'Phnom Penh Intl Airport (PNH)', 'RGN': 'Yangon Intl Airport (RGN)', 'VTE': 'Wattay Intl Airport (VTE)', 'ALA': 'Almaty Intl Airport (ALA)', 'NQZ': 'Nursultan Nazarbayev Intl (NQZ)', 'TAS': 'Islam Karimov Tashkent (TAS)',
+            'OOL': 'Gold Coast Airport (OOL)', 'CNS': 'Cairns Airport (CNS)', 'DRW': 'Darwin Intl Airport (DRW)', 'HBA': 'Hobart Airport (HBA)', 'CBR': 'Canberra Airport (CBR)', 'WLG': 'Wellington Intl Airport (WLG)', 'ZQN': 'Queenstown Airport (ZQN)',
+            'CNF': 'Belo Horizonte Tancredo Neves (CNF)', 'BSB': 'Brasilia Presidente Juscelino Kubitschek (BSB)', 'REC': 'Recife/Guararapes-Gilberto Freyre (REC)', 'SSA': 'Salvador Deputado Luis Eduardo Magalhaes (SSA)', 'FOR': 'Fortaleza Pinto Martins (FOR)', 'CWB': 'Curitiba Afonso Pena (CWB)', 'POA': 'Porto Alegre Salgado Filho (POA)', 'VCP': 'Viracopos/Campinas Intl (VCP)', 'MDE': 'Jose Maria Cordova Intl (MDE)', 'CLO': 'Alfonso Bonilla Aragon (CLO)', 'CTG': 'Rafael Nunez Intl (CTG)', 'GYE': 'Jose Joaquin de Olmedo (GYE)', 'LPB': 'El Alto Intl Airport (LPB)', 'VVI': 'Viru Viru Intl Airport (VVI)', 'ASU': 'Silvio Pettirossi Intl (ASU)', 'MVD': 'Carrasco Intl Airport (MVD)', 'COR': 'Ingeniero Aeronautico Ambrosio Taravella (COR)', 'MDZ': 'Governor Francisco Gabrielli (MDZ)', 'PTY': 'Tocumen Intl Airport (PTY)', 'SJO': 'Juan Santamaria Intl (SJO)', 'LIR': 'Daniel Oduber Quiros Intl (LIR)', 'SAL': 'El Salvador Intl Airport (SAL)', 'GUA': 'La Aurora Intl Airport (GUA)', 'BZE': 'Philip S. W. Goldson Intl (BZE)', 'RTB': 'Juan Manuel Galvez Intl (RTB)', 'HAV': 'Jose Marti Intl Airport (HAV)', 'VRA': 'Juan Gualberto Gomez (VRA)', 'NAS': 'Lynden Pindling Intl (NAS)', 'MBJ': 'Sangster Intl Airport (MBJ)', 'KIN': 'Norman Manley Intl (KIN)', 'PUJ': 'Punta Cana Intl Airport (PUJ)', 'SDQ': 'Las Americas Intl Airport (SDQ)', 'SXM': 'Princess Juliana Intl (SXM)', 'AUA': 'Queen Beatrix Intl (AUA)', 'CUR': 'Curacao Intl Airport (CUR)', 'BGI': 'Grantley Adams Intl (BGI)', 'POS': 'Piarco Intl Airport (POS)', 'ANU': 'V. C. Bird Intl Airport (ANU)', 'UVF': 'Hewanorra Intl Airport (UVF)', 'GND': 'Maurice Bishop Intl (GND)',
+            'AGU': 'Aguascalientes Jesus Teran Peredo (AGU)', 'PBC': 'Puebla Hermanos Serdan (PBC)', 'TAM': 'Tampico General Francisco Javier Mina (TAM)', 'REX': 'Reynosa General Lucio Blanco (REX)', 'TRC': 'Torreon Francisco Sarabia (TRC)', 'CEN': 'Ciudad Obregon Intl (CEN)', 'LMM': 'Los Mochis Federal del Valle del Fuerte (LMM)', 'LAP': 'Manuel Marquez de Leon (LAP)', 'CME': 'Ciudad del Carmen Intl (CME)', 'TAP': 'Tapachula Intl Airport (TAP)',
+            'YDA': 'Dawson City Airport (YDA)', 'YZS': 'Coral Harbour Airport (YZS)', 'YCO': 'Kugluktuk Airport (YCO)',
+            'BLI': 'Bellingham Intl Airport (BLI)',
+            'FCA': 'Glacier Park Intl Airport (FCA)',
+            'JNU': 'Juneau Intl Airport (JNU)',
+            'KTN': 'Ketchikan Intl Airport (KTN)',
+            'PSG': 'Petersburg James A. Johnson (PSG)',
+            'SIT': 'Sitka Rocky Gutierrez (SIT)',
+            'WRG': 'Wrangell Airport (WRG)',
+            'CDV': 'Merle K. (Mudhole) Smith (CDV)',
+            'BET': 'Bethel Airport (BET)',
+            'OME': 'Nome Airport (OME)',
+            'OTZ': 'Ralph Wien Memorial (OTZ)',
+            'SCC': 'Deadhorse Airport (SCC)',
+            'BRW': 'Wiley Post-Will Rogers Memorial (BRW)',
+            'ADK': 'Adak Airport (ADK)',
+            'DUT': 'Unalaska Airport (DUT)',
+            'ACK': 'Nantucket Memorial Airport (ACK)',
+            'MVY': 'Martha\'s Vineyard Airport (MVY)',
+            'HYA': 'Barnstable Municipal Airport (HYA)',
+            'PVC': 'Provincetown Municipal Airport (PVC)',
+            'BID': 'Block Island State Airport (BID)',
+            'WST': 'Westerly State Airport (WST)',
+            'GON': 'Groton-New London Airport (GON)',
+            'IAG': 'Niagara Falls Intl Airport (IAG)',
+            'PBG': 'Plattsburgh Intl Airport (PBG)',
+            'UST': 'Northeast Florida Regional (UST)',
+            'MLB': 'Melbourne Orlando Intl (MLB)',
+            'VRB': 'Vero Beach Regional (VRB)',
+            'FPR': 'Treasure Coast Intl (FPR)',
+            'APF': 'Naples Municipal Airport (APF)',
+            'PGD': 'Punta Gorda Airport (PGD)',
+
+            // --- CANADA (Remote & Regional Additions) ---
+            'YQY': 'Sydney/J.A. Douglas McCurdy (YQY)',
+            'YJT': 'Stephenville Intl Airport (YJT)',
+            'YGR': 'Îles-de-la-Madeleine Airport (YGR)',
+            'YGP': 'Michel-Pouliot Gaspé Airport (YGP)',
+            'YVK': 'Nanaimo Harbour Water Airport (YVK)',
+            'YWH': 'Victoria Inner Harbour Airport (YWH)',
+            'CXH': 'Vancouver Harbour Flight Centre (CXH)',
+            'YTZ': 'Billy Bishop Toronto City (YTZ)',
+
+            // --- EUROPE (Regional & Secondary Cities) ---
+            // UK & Ireland
+            'CWL': 'Cardiff Airport (CWL)',
+            'EXT': 'Exeter Airport (EXT)',
+            'NQY': 'Cornwall Airport Newquay (NQY)',
+            'MME': 'Teesside Intl Airport (MME)',
+            'HUY': 'Humberside Airport (HUY)',
+            'PIK': 'Glasgow Prestwick Airport (PIK)',
+            'LDY': 'City of Derry Airport (LDY)',
+            'NOC': 'Ireland West Airport Knock (NOC)',
+            'KIR': 'Kerry Airport (KIR)',
+            // France
+            'MPL': 'Montpellier-Méditerranée (MPL)',
+            'RNS': 'Rennes-Saint-Jacques (RNS)',
+            'BES': 'Brest Bretagne Airport (BES)',
+            'BIQ': 'Biarritz Pays Basque (BIQ)',
+            'BIA': 'Bastia Poretta Airport (BIA)',
+            'AJA': 'Ajaccio Napoleon Bonaparte (AJA)',
+            'FSC': 'Figari-Sud Corse Airport (FSC)',
+            'TLN': 'Toulon-Hyères Airport (TLN)',
+            // Spain
+            'GRO': 'Girona-Costa Brava Airport (GRO)',
+            'REU': 'Reus Airport (REU)',
+            'XRY': 'Jerez Airport (XRY)',
+            'LEI': 'Almería Airport (LEI)',
+            'OVD': 'Asturias Airport (OVD)',
+            'SDR': 'Seve Ballesteros-Santander (SDR)',
+            'VGO': 'Vigo-Peinador Airport (VGO)',
+            'GRX': 'Federico García Lorca Granada (GRX)',
+            // Italy
+            'TSF': 'Treviso Airport (TSF)',
+            'GOA': 'Genoa Cristoforo Colombo (GOA)',
+            'TRS': 'Trieste – Friuli Venezia Giulia (TRS)',
+            'BRI': 'Bari Karol Wojtyła Airport (BRI)',
+            'BDS': 'Brindisi Salento Airport (BDS)',
+            'SUF': 'Lamezia Terme Intl Airport (SUF)',
+            'AHO': 'Alghero-Fertilia Airport (AHO)',
+            'PSR': 'Abruzzo Airport (PSR)',
+            // Germany
+            'HHN': 'Frankfurt-Hahn Airport (HHN)',
+            'FMM': 'Memmingen Airport (FMM)',
+            'PAD': 'Paderborn Lippstadt Airport (PAD)',
+            'NRN': 'Weeze Airport (NRN)',
+            'FKB': 'Karlsruhe/Baden-Baden (FKB)',
+            // Scandinavia
+            'BGO': 'Bergen Airport, Flesland (BGO)',
+            'SVG': 'Stavanger Airport, Sola (SVG)',
+            'TRD': 'Trondheim Airport, Værnes (TRD)',
+            'TOS': 'Tromsø Airport (TOS)',
+            'GOT': 'Göteborg Landvetter Airport (GOT)',
+            'MMX': 'Malmö Airport (MMX)',
+            'AAL': 'Aalborg Airport (AAL)',
+            'BLL': 'Billund Airport (BLL)',
+            // Eastern/Central Europe
+            'KTW': 'Katowice Airport (KTW)',
+            'WRO': 'Wrocław Nicolaus Copernicus (WRO)',
+            'POZ': 'Poznań-Ławica Henryk Wieniawski (POZ)',
+            'CLJ': 'Cluj-Napoca Intl Airport (CLJ)',
+            'TSR': 'Timișoara Traian Vuia Intl (TSR)',
+            'DEB': 'Debrecen Intl Airport (DEB)',
+            'VAR': 'Varna Airport (VAR)',
+            'BOJ': 'Burgas Airport (BOJ)',
+            'SKP': 'Skopje Intl Airport (SKP)',
+            'TIA': 'Tirana Intl Airport Nënë Tereza (TIA)',
+            'PRN': 'Pristina Intl Airport (PRN)',
+            'SJJ': 'Sarajevo Intl Airport (SJJ)',
+            'TGD': 'Podgorica Airport (TGD)',
+            'TIV': 'Tivat Airport (TIV)',
+
+            // --- CARIBBEAN & ATLANTIC (Islands) ---
+            'BDA': 'L.F. Wade Intl Airport (BDA)',
+            'GCM': 'Owen Roberts Intl (GCM)',
+            'PLS': 'Providenciales Intl Airport (PLS)',
+            'SKB': 'Robert L. Bradshaw Intl (SKB)',
+            'EIS': 'Terrance B. Lettsome Intl (EIS)',
+            'STT': 'Cyril E. King Airport (STT)',
+            'STX': 'Henry E. Rohlsen Airport (STX)',
+            'DOM': 'Douglas-Charles Airport (DOM)',
+            'PTP': 'Pointe-à-Pitre Intl Airport (PTP)',
+            'FDF': 'Martinique Aimé Césaire Intl (FDF)',
+            'TAB': 'A.N.R. Robinson Intl (TAB)',
+            'BON': 'Flamingo Intl Airport (BON)',
+
+            // --- LATIN AMERICA (Domestic Hubs) ---
+            // Brazil
+            'FLN': 'Florianópolis-Hercílio Luz (FLN)',
+            'MAO': 'Manaus Eduardo Gomes Intl (MAO)',
+            'BEL': 'Belém/Val-de-Cans Intl (BEL)',
+            'NAT': 'Natal–Gov. Aluízio Alves (NAT)',
+            'MCZ': 'Maceió/Zumbi dos Palmares (MCZ)',
+            'IGU': 'Foz do Iguaçu Intl Airport (IGU)',
+            'CGB': 'Cuiabá–Marechal Rondon (CGB)',
+            'GYN': 'Goiânia–Santa Genoveva (GYN)',
+            'VIX': 'Vitória–Eurico de Aguiar Salles (VIX)',
+            // Argentina
+            'BRC': 'San Carlos de Bariloche (BRC)',
+            'USH': 'Ushuaia – Malvinas Argentinas (USH)',
+            'FTE': 'Comandante Armando Tola (FTE)',
+            'IGR': 'Cataratas del Iguazú Intl (IGR)',
+            'NQN': 'Presidente Perón Intl (NQN)',
+            'SLA': 'Martín Miguel de Güemes (SLA)',
+            'TUC': 'Teniente General Benjamín Matienzo (TUC)',
+            // Colombia
+            'SMR': 'Simón Bolívar Intl Airport (SMR)',
+            'PEI': 'Matecaña Intl Airport (PEI)',
+            'BGA': 'Palonegro Intl Airport (BGA)',
+            'ADZ': 'Gustavo Rojas Pinilla Intl (ADZ)',
+            // Chile
+            'ANF': 'Andrés Sabella Gálvez Intl (ANF)',
+            'CJC': 'El Loa Airport (CJC)',
+            'PMC': 'El Tepual Airport (PMC)',
+            'PUQ': 'Presidente Carlos Ibáñez (PUQ)',
+            // Peru
+            'CUZ': 'Alejandro Velasco Astete Intl (CUZ)',
+            'AQP': 'Rodríguez Ballón Intl (AQP)',
+            'IQT': 'Coronel FAP Francisco Secada (IQT)',
+
+            // --- AFRICA (Secondary & Safari) ---
+            'ABV': 'Nnamdi Azikiwe Intl Airport (ABV)',
+            'KAN': 'Mallam Aminu Kano Intl (KAN)',
+            'PHC': 'Port Harcourt Intl Airport (PHC)',
+            'JRO': 'Kilimanjaro Intl Airport (JRO)',
+            'MBA': 'Moi Intl Airport (MBA)',
+            'VFA': 'Victoria Falls Airport (VFA)',
+            'LVI': 'Harry Mwanga Nkumbula Intl (LVI)',
+            'WDH': 'Hosea Kutako Intl Airport (WDH)',
+            'GBE': 'Sir Seretse Khama Intl (GBE)',
+            'MTS': 'Matsapha Intl Airport (MTS)',
+            'MPM': 'Maputo Intl Airport (MPM)',
+            'TNR': 'Ivato Intl Airport (TNR)',
+            'FEZ': 'Fès–Saïss Airport (FEZ)',
+            'TNG': 'Tangier Ibn Battouta Airport (TNG)',
+            'RBA': 'Rabat–Salé Airport (RBA)',
+            'DJE': 'Djerba–Zarzis Intl Airport (DJE)',
+            'MIR': 'Monastir Habib Bourguiba Intl (MIR)',
+
+            // --- ASIA (Tier 2 & Regional) ---
+            // China
+            'TSN': 'Tianjin Binhai Intl Airport (TSN)',
+            'HFE': 'Hefei Xinqiao Intl Airport (HFE)',
+            'FOC': 'Fuzhou Changle Intl Airport (FOC)',
+            'NKG': 'Nanjing Lukou Intl Airport (NKG)',
+            'TYN': 'Taiyuan Wusu Intl Airport (TYN)',
+            'KWE': 'Guiyang Longdongbao Intl (KWE)',
+            'NNG': 'Nanning Wuxu Intl Airport (NNG)',
+            'LHW': 'Lanzhou Zhongchuan Intl (LHW)',
+            // Japan
+            'SDJ': 'Sendai Airport (SDJ)',
+            'KOJ': 'Kagoshima Airport (KOJ)',
+            'KMJ': 'Kumamoto Airport (KMJ)',
+            'MYJ': 'Matsuyama Airport (MYJ)',
+            'HIJ': 'Hiroshima Airport (HIJ)',
+            // India
+            'CCJ': 'Calicut Intl Airport (CCJ)',
+            'LKO': 'Chaudhary Charan Singh Intl (LKO)',
+            'IXC': 'Shaheed Bhagat Singh Intl (IXC)',
+            'SXR': 'Sheikh ul-Alam Intl (SXR)',
+            'PAT': 'Jayprakash Narayan Intl (PAT)',
+            'NAG': 'Dr. Babasaheb Ambedkar Intl (NAG)',
+            'BBI': 'Biju Patnaik Intl Airport (BBI)',
+            'IXB': 'Bagdogra Intl Airport (IXB)',
+            // Southeast Asia
+            'UTP': 'U-Tapao Rayong Pattaya Intl (UTP)',
+            'CEI': 'Chiang Rai Intl Airport (CEI)',
+            'CXR': 'Cam Ranh Intl Airport (CXR)',
+            'PQC': 'Phu Quoc Intl Airport (PQC)',
+            'HUI': 'Phu Bai Intl Airport (HUI)',
+            'DVO': 'Francisco Bangoy Intl (DVO)',
+            'ILO': 'Iloilo Intl Airport (ILO)',
+            'BCD': 'Bacolod–Silay Airport (BCD)',
+            'KLO': 'Kalibo Intl Airport (KLO)',
+            'MPH': 'Godofredo P. Ramos (MPH)',
+            'BPN': 'Sultan Aji Muhammad Sulaiman (BPN)',
+            'UPG': 'Sultan Hasanuddin Intl (UPG)',
+            'JOG': 'Adisutjipto Airport (JOG)',
+            'YIA': 'Yogyakarta Intl Airport (YIA)',
+            'LOP': 'Zainuddin Abdul Madjid (LOP)',
+            'BWN': 'Brunei Intl Airport (BWN)',
+            // Central Asia
+            'DYU': 'Dushanbe Intl Airport (DYU)',
+            'FRU': 'Manas Intl Airport (FRU)',
+            'ASB': 'Ashgabat Intl Airport (ASB)',
+            'OSS': 'Osh Intl Airport (OSS)',
+
+            // --- MIDDLE EAST (Regional) ---
+            'AAN': 'Al Ain Intl Airport (AAN)',
+            'FJR': 'Fujairah Intl Airport (FJR)',
+            'AHB': 'Abha Intl Airport (AHB)',
+            'TIF': 'Taif Intl Airport (TIF)',
+            'ELQ': 'Prince Nayef bin Abdulaziz (ELQ)',
+            'HOF': 'Al-Ahsa Intl Airport (HOF)',
+            'GIZ': 'Jizan Regional Airport (GIZ)',
+            'HAS': 'Hail Regional Airport (HAS)',
+            'TUU': 'Tabuk Regional Airport (TUU)',
+            'KHS': 'Khasab Airport (KHS)',
+            'AQJ': 'Aqaba King Hussein Intl (AQJ)',
+
+            // --- OCEANIA (Pacific Islands & AU Regional) ---
+            'NAN': 'Nadi Intl Airport (NAN)',
+            'SUV': 'Nausori Intl Airport (SUV)',
+            'POM': 'Jacksons Intl Airport (POM)',
+            'PPT': 'Faa\'a Intl Airport (PPT)',
+            'NOU': 'La Tontouta Intl Airport (NOU)',
+            'APW': 'Faleolo Intl Airport (APW)',
+            'RAR': 'Rarotonga Intl Airport (RAR)',
+            'TBU': 'Fuaʻamotu Intl Airport (TBU)',
+            'VLI': 'Bauerfield Intl Airport (VLI)',
+            'GUM': 'Antonio B. Won Pat Intl (GUM)',
+            'SPN': 'Saipan Intl Airport (SPN)',
+            'TSV': 'Townsville Airport (TSV)',
+            'ASP': 'Alice Springs Airport (ASP)',
+            'AYQ': 'Ayers Rock Airport (AYQ)',
+            'BME': 'Broome Intl Airport (BME)',
+            'LST': 'Launceston Airport (LST)',
+            'DUD': 'Dunedin Airport (DUD)',
+            'NPE': 'Hawke\'s Bay Airport (NPE)',
+            'PMR': 'Palmerston North Airport (PMR)',
+            'NSN': 'Nelson Airport (NSN)',
+
+            // --- MISSING & REQUESTED (Specific Fixes) ---
+            'COO': 'Cotonou Cadjehoun Airport (COO)',
+            'VRA': 'Varadero Juan Gualberto Gómez (VRA)',
+            'HAV': 'Havana José Martí Intl (HAV)',
+            'HOG': 'Holguín Frank País Airport (HOG)',
+            'SNU': 'Santa Clara Abel Santamaría (SNU)',
+            'CMW': 'Camagüey Ignacio Agramonte (CMW)',
+
+            // --- RUSSIA & CIS (Major Expansion) ---
+            'SVO': 'Moscow Sheremetyevo Intl (SVO)',
+            'DME': 'Moscow Domodedovo Intl (DME)',
+            'VKO': 'Moscow Vnukovo Intl (VKO)',
+            'ZIA': 'Zhukovsky Intl Airport (ZIA)',
+            'LED': 'St. Petersburg Pulkovo (LED)',
+            'AER': 'Sochi Intl Airport (AER)',
+            'OVB': 'Novosibirsk Tolmachevo (OVB)',
+            'SVX': 'Yekaterinburg Koltsovo (SVX)',
+            'KZN': 'Kazan Intl Airport (KZN)',
+            'KRR': 'Krasnodar Pashkovsky (KRR)',
+            'UFA': 'Ufa Intl Airport (UFA)',
+            'KUF': 'Samara Kurumoch Intl (KUF)',
+            'ROV': 'Rostov-on-Don Platov Intl (ROV)',
+            'VVO': 'Vladivostok Knevichi (VVO)',
+            'KHV': 'Khabarovsk Novy (KHV)',
+            'IKT': 'Irkutsk Intl Airport (IKT)',
+            'MRV': 'Mineralnye Vody Airport (MRV)',
+            'KJA': 'Krasnoyarsk Yemelyanovo (KJA)',
+            'TJM': 'Tyumen Roshchino (TJM)',
+            'SGC': 'Surgut Intl Airport (SGC)',
+            'CEK': 'Chelyabinsk Balandino (CEK)',
+            'PEE': 'Perm Bolshoye Savino (PEE)',
+            'KGD': 'Kaliningrad Khrabrovo (KGD)',
+            'GOJ': 'Nizhny Novgorod Strigino (GOJ)',
+            'OMS': 'Omsk Tsentralny (OMS)',
+            'YKS': 'Yakutsk Airport (YKS)',
+            'UUS': 'Yuzhno-Sakhalinsk (UUS)',
+            'PKC': 'Petropavlovsk-Kamchatsky (PKC)',
+            'GYD': 'Baku Heydar Aliyev Intl (GYD)',
+            'EVN': 'Yerevan Zvartnots Intl (EVN)',
+            'TBS': 'Tbilisi Intl Airport (TBS)',
+            'MSQ': 'Minsk National Airport (MSQ)',
+            'NQZ': 'Astana Nursultan Nazarbayev (NQZ)', // formerly TSE
+
+            // --- EUROPE (Regional & Holiday) ---
+            // France
+            'RNS': 'Rennes–Saint-Jacques (RNS)',
+            'BES': 'Brest Bretagne Airport (BES)',
+            'MPL': 'Montpellier–Méditerranée (MPL)',
+            'BIA': 'Bastia Poretta Airport (BIA)',
+            'AJA': 'Ajaccio Napoleon Bonaparte (AJA)',
+            'FSC': 'Figari–Sud Corse Airport (FSC)',
+            'TLN': 'Toulon–Hyères Airport (TLN)',
+            'BIQ': 'Biarritz Pays Basque (BIQ)',
+            'PUF': 'Pau Pyrénées Airport (PUF)',
+            'LIG': 'Limoges–Bellegarde (LIG)',
+            'PGF': 'Perpignan–Rivesaltes (PGF)',
+            'BZR': 'Béziers Cap d\'Agde (BZR)',
+            'LRH': 'La Rochelle–Île de Ré (LRH)',
+            'EGC': 'Bergerac Dordogne Périgord (EGC)',
+            'FNI': 'Nîmes–Alès–Camargue–Cévennes (FNI)',
+            'DLE': 'Dole–Jura Airport (DLE)',
+            // UK & Ireland
+            'NWI': 'Norwich Airport (NWI)',
+            'BOH': 'Bournemouth Airport (BOH)',
+            'EXT': 'Exeter Airport (EXT)',
+            'NQY': 'Cornwall Airport Newquay (NQY)',
+            'CWL': 'Cardiff Airport (CWL)',
+            'HUY': 'Humberside Airport (HUY)',
+            'MME': 'Teesside Intl Airport (MME)',
+            'PIK': 'Glasgow Prestwick Airport (PIK)',
+            'LDY': 'City of Derry Airport (LDY)',
+            'NOC': 'Ireland West Airport Knock (NOC)',
+            'KIR': 'Kerry Airport (KIR)',
+            'INV': 'Inverness Airport (INV)',
+            'KOI': 'Kirkwall Airport (KOI)',
+            'LSI': 'Sumburgh Airport (LSI)',
+            'GCI': 'Guernsey Airport (GCI)',
+            'JER': 'Jersey Airport (JER)',
+            'IOM': 'Isle of Man Airport (IOM)',
+            // Scandinavia
+            'BGO': 'Bergen Airport, Flesland (BGO)',
+            'SVG': 'Stavanger Airport, Sola (SVG)',
+            'TRD': 'Trondheim Airport, Værnes (TRD)',
+            'TOS': 'Tromsø Airport (TOS)',
+            'BOO': 'Bodø Airport (BOO)',
+            'AES': 'Ålesund Airport, Vigra (AES)',
+            'KRS': 'Kristiansand Airport, Kjevik (KRS)',
+            'HAU': 'Haugesund Airport, Karmøy (HAU)',
+            'MOL': 'Molde Airport, Årø (MOL)',
+            'EVE': 'Harstad/Narvik Airport (EVE)',
+            'GOT': 'Göteborg Landvetter (GOT)',
+            'MMX': 'Malmö Airport (MMX)',
+            'BMA': 'Stockholm Bromma (BMA)',
+            'NYO': 'Stockholm Skavsta (NYO)',
+            'VST': 'Stockholm Västerås (VST)',
+            'LLA': 'Luleå Airport (LLA)',
+            'UME': 'Umeå Airport (UME)',
+            'OSD': 'Åre Östersund Airport (OSD)',
+            'VBY': 'Visby Airport (VBY)',
+            'OUL': 'Oulu Airport (OUL)',
+            'RVN': 'Rovaniemi Airport (RVN)',
+            'TMP': 'Tampere–Pirkkala Airport (TMP)',
+            'TKU': 'Turku Airport (TKU)',
+            'VAA': 'Vaasa Airport (VAA)',
+            'KUO': 'Kuopio Airport (KUO)',
+            'IVL': 'Ivalo Airport (IVL)',
+            'KTT': 'Kittilä Airport (KTT)',
+            'FAE': 'Vágar Airport (FAE)',
+            // Italy
+            'TSF': 'Treviso Airport (TSF)',
+            'TRS': 'Trieste Airport (TRS)',
+            'GOA': 'Genoa Cristoforo Colombo (GOA)',
+            'AOI': 'Ancona Marche Airport (AOI)',
+            'PEG': 'Perugia San Francesco d\'Assisi (PEG)',
+            'PSR': 'Abruzzo Airport (PSR)',
+            'BRI': 'Bari Karol Wojtyła (BRI)',
+            'BDS': 'Brindisi Salento (BDS)',
+            'SUF': 'Lamezia Terme Intl (SUF)',
+            'REG': 'Reggio Calabria Airport (REG)',
+            'AHO': 'Alghero-Fertilia (AHO)',
+            'RMI': 'Federico Fellini Intl (RMI)',
+            // Spain
+            'GRO': 'Girona–Costa Brava (GRO)',
+            'REU': 'Reus Airport (REU)',
+            'VLL': 'Valladolid Airport (VLL)',
+            'LCG': 'A Coruña Airport (LCG)',
+            'VGO': 'Vigo–Peinador Airport (VGO)',
+            'OVD': 'Asturias Airport (OVD)',
+            'SDR': 'Seve Ballesteros–Santander (SDR)',
+            'EAS': 'San Sebastián Airport (EAS)',
+            'PNA': 'Pamplona Airport (PNA)',
+            'ZAZ': 'Zaragoza Airport (ZAZ)',
+            'VIT': 'Vitoria Airport (VIT)',
+            'XRY': 'Jerez Airport (XRY)',
+            'GRX': 'Federico García Lorca Granada (GRX)',
+            'LEI': 'Almería Airport (LEI)',
+            'MJV': 'Murcia–San Javier (MJV)',
+            // Central/Eastern Europe
+            'SZG': 'Salzburg Airport (SZG)',
+            'INN': 'Innsbruck Airport (INN)',
+            'GRZ': 'Graz Airport (GRZ)',
+            'LNZ': 'Linz Airport (LNZ)',
+            'LJU': 'Ljubljana Jože Pučnik (LJU)',
+            'SKG': 'Thessaloniki Airport (SKG)',
+            'HER': 'Heraklion Intl Airport (HER)',
+            'RHO': 'Rhodes Intl Airport (RHO)',
+            'CFU': 'Corfu Intl Airport (CFU)',
+            'KGS': 'Kos Intl Airport (KGS)',
+            'CHQ': 'Chania Intl Airport (CHQ)',
+            'JTR': 'Santorini (Thira) Intl (JTR)',
+            'JMK': 'Mykonos Airport (JMK)',
+            'ZTH': 'Zakynthos Intl Airport (ZTH)',
+            'TZX': 'Trabzon Airport (TZX)',
+            'GZT': 'Gaziantep Oğuzeli (GZT)',
+            'ADA': 'Adana Şakirpaşa (ADA)',
+
+            // --- ASIA (Tier 2/3 & Islands) ---
+            // China
+            'TNA': 'Jinan Yaoqiang Intl (TNA)',
+            'CGQ': 'Changchun Longjia Intl (CGQ)',
+            'HRB': 'Harbin Taiping Intl (HRB)',
+            'SJW': 'Shijiazhuang Zhengding (SJW)',
+            'WNZ': 'Wenzhou Longwan Intl (WNZ)',
+            'NGB': 'Ningbo Lishe Intl (NGB)',
+            'HAK': 'Haikou Meilan Intl (HAK)',
+            'SYX': 'Sanya Phoenix Intl (SYX)',
+            'KWL': 'Guilin Liangjiang Intl (KWL)',
+            'LJG': 'Lijiang Sanyi Intl (LJG)',
+            'JHG': 'Xishuangbanna Gasa (JHG)',
+            'KHN': 'Nanchang Changbei Intl (KHN)',
+            'HET': 'Hohhot Baita Intl (HET)',
+            'LSA': 'Lhasa Gonggar Airport (LSA)',
+            'XNN': 'Xining Caojiabao Intl (XNN)',
+            'YIN': 'Yining Airport (YIN)',
+            'KRL': 'Korla Licheng Airport (KRL)',
+            'KHG': 'Kashi Laining Intl (KHG)',
+            'ZUH': 'Zhuhai Jinwan Airport (ZUH)',
+            'SWA': 'Jieyang Chaoshan Intl (SWA)',
+            // Indonesia
+            'LOP': 'Lombok Zainuddin Abdul Madjid (LOP)',
+            'JOG': 'Yogyakarta Adisutjipto (JOG)',
+            'YIA': 'Yogyakarta Intl Airport (YIA)',
+            'SOC': 'Solo Adisumarmo Intl (SOC)',
+            'SRG': 'Semarang Ahmad Yani (SRG)',
+            'PKU': 'Pekanbaru Sultan Syarif Kasim II (PKU)',
+            'PLM': 'Palembang Sultan Mahmud Badaruddin II (PLM)',
+            'PNK': 'Pontianak Supadio Intl (PNK)',
+            'BPN': 'Balikpapan Sultan Aji Muhammad Sulaiman (BPN)',
+            'MDC': 'Manado Sam Ratulangi Intl (MDC)',
+            'AMQ': 'Ambon Pattimura Airport (AMQ)',
+            'DJJ': 'Jayapura Sentani Intl (DJJ)',
+            'SOQ': 'Sorong Domine Eduard Osok (SOQ)',
+            'KOE': 'Kupang El Tari (KOE)',
+            'BKS': 'Bengkulu Fatmawati Soekarno (BKS)',
+            'TJQ': 'Belitung H.A.S. Hanandjoeddin (TJQ)',
+            // Philippines
+            'PPS': 'Puerto Princesa Intl (PPS)',
+            'TAC': 'Tacloban Daniel Z. Romualdez (TAC)',
+            'ZAM': 'Zamboanga Intl Airport (ZAM)',
+            'GES': 'General Santos Intl (GES)',
+            'TAG': 'Bohol–Panglao Intl (TAG)',
+            'USU': 'Busuanga Francisco B. Reyes (USU)',
+            'IAO': 'Siargao Sayak Airport (IAO)',
+            // Thailand/Vietnam/Cambodia
+            'URT': 'Surat Thani Intl (URT)',
+            'HDY': 'Hat Yai Intl (HDY)',
+            'UBP': 'Ubon Ratchathani (UBP)',
+            'UTH': 'Udon Thani Intl (UTH)',
+            'KKC': 'Khon Kaen Airport (KKC)',
+            'VCA': 'Can Tho Intl Airport (VCA)',
+            'HPH': 'Hai Phong Cat Bi Intl (HPH)',
+            'KOS': 'Sihanoukville Intl (KOS)',
+            'MDL': 'Mandalay Intl Airport (MDL)',
+            'LPQ': 'Luang Prabang Intl (LPQ)',
+            // India & South Asia
+            'CJB': 'Coimbatore Intl Airport (CJB)',
+            'TRZ': 'Tiruchirappalli Intl (TRZ)',
+            'MAQ': 'Mangalore Intl Airport (MAQ)',
+            'IXZ': 'Port Blair Veer Savarkar (IXZ)',
+            'VTZ': 'Visakhapatnam Intl (VTZ)',
+            'VNS': 'Varanasi Lal Bahadur Shastri (VNS)',
+            'RPR': 'Raipur Swami Vivekananda (RPR)',
+            'IDR': 'Indore Devi Ahilya Bai Holkar (IDR)',
+            'BHO': 'Bhopal Raja Bhoj (BHO)',
+            'MLE': 'Maldives Velana Intl (MLE)',
+            'GAN': 'Maldives Gan Intl (GAN)',
+            'CMB': 'Colombo Bandaranaike Intl (CMB)',
+            'HRI': 'Mattala Rajapaksa Intl (HRI)',
+            'DAC': 'Dhaka Hazrat Shahjalal (DAC)',
+            'CGP': 'Chittagong Shah Amanat (CGP)',
+            'ZYL': 'Sylhet Osmani Intl (ZYL)',
+            'ISB': 'Islamabad Intl Airport (ISB)',
+            'LHE': 'Lahore Allama Iqbal Intl (LHE)',
+            'KHI': 'Karachi Jinnah Intl (KHI)',
+            'SKT': 'Sialkot Intl Airport (SKT)',
+            'PEW': 'Peshawar Bacha Khan Intl (PEW)',
+            'MUX': 'Multan Intl Airport (MUX)',
+
+            // --- AFRICA (Comprehensive) ---
+            'LAD': 'Luanda Quatro de Fevereiro (LAD)',
+            'FIH': 'Kinshasa N\'Djili Intl (FIH)',
+            'FBM': 'Lubumbashi Intl Airport (FBM)',
+            'BGF': 'Bangui M\'Poko Intl (BGF)',
+            'NDJ': 'N\'Djamena Intl Airport (NDJ)',
+            'NIM': 'Niamey Diori Hamani (NIM)',
+            'OUA': 'Ouagadougou Intl (OUA)',
+            'BKO': 'Bamako–Sénou Intl (BKO)',
+            'CKY': 'Conakry Ahmed Sékou Touré (CKY)',
+            'FNA': 'Freetown Lungi Intl (FNA)',
+            'ROB': 'Monrovia Roberts Intl (ROB)',
+            'LFW': 'Lomé–Tokoin Intl (LFW)',
+            'DLA': 'Douala Intl Airport (DLA)',
+            'NSI': 'Yaoundé Nsimalen Intl (NSI)',
+            'LBV': 'Libreville Léon-Mba Intl (LBV)',
+            'BJL': 'Banjul Yundum Intl (BJL)',
+            'OXB': 'Bissau Osvaldo Vieira Intl (OXB)',
+            'SID': 'Amílcar Cabral Intl (SID)',
+            'BVC': 'Boa Vista Rabil (BVC)',
+            'NKC': 'Nouakchott–Oumtounsy Intl (NKC)',
+            'ASM': 'Asmara Intl Airport (ASM)',
+            'JIB': 'Djibouti–Ambouli Intl (JIB)',
+            'MGQ': 'Mogadishu Aden Adde Intl (MGQ)',
+            'HGA': 'Hargeisa Egal Intl (HGA)',
+            'JUB': 'Juba Intl Airport (JUB)',
+            'KRT': 'Khartoum Intl Airport (KRT)',
+            'TIP': 'Tripoli Intl Airport (TIP)',
+            'MJI': 'Mitiga Intl Airport (MJI)',
+            'BEN': 'Benina Intl Airport (BEN)',
+            'BLZ': 'Blantyre Chileka Intl (BLZ)',
+            'LLW': 'Lilongwe Kamuzu Intl (LLW)',
+            'BUQ': 'Bulawayo Joshua Mqabuko Nkomo (BUQ)',
+            'WVB': 'Walvis Bay Airport (WVB)',
+            'MUB': 'Maun Airport (MUB)',
+            'KAS': 'Kasane Airport (KAS)',
+            'NLA': 'Ndola Simon Mwansa Kapwepwe (NLA)',
+            'VXC': 'Vilanculos Airport (VXC)',
+            'NOS': 'Nosy Be Fascene (NOS)',
+            'RUN': 'Roland Garros Airport (RUN)',
+
+            // --- AMERICAS (Gaps & Regional) ---
+            // Caribbean
+            'PAP': 'Port-au-Prince Toussaint Louverture (PAP)',
+            'STI': 'Santiago de los Caballeros (STI)',
+            'POP': 'Puerto Plata Gregorio Luperón (POP)',
+            'LRM': 'La Romana Intl Airport (LRM)',
+            'AZS': 'Samaná El Catey Intl (AZS)',
+            'SLU': 'St. Lucia George F. L. Charles (SLU)',
+            'BON': 'Bonaire Flamingo Intl (BON)',
+            'FPO': 'Grand Bahama Intl (FPO)',
+            // South America
+            'GEO': 'Georgetown Cheddi Jagan (GEO)',
+            'PBM': 'Paramaribo Johan Adolf Pengel (PBM)',
+            'CAY': 'Cayenne–Félix Eboué (CAY)',
+            'BAQ': 'Barranquilla Ernesto Cortissoz (BAQ)',
+            'SMR': 'Santa Marta Simón Bolívar (SMR)',
+            'CUC': 'Cúcuta Camilo Daza Intl (CUC)',
+            'BGA': 'Bucaramanga Palonegro Intl (BGA)',
+            'ADZ': 'San Andrés Gustavo Rojas Pinilla (ADZ)',
+            'GPS': 'Baltra Seymour Airport (GPS)',
+            'SCY': 'San Cristóbal Airport (SCY)',
+            'CUZ': 'Cusco Alejandro Velasco Astete (CUZ)',
+            'AQP': 'Arequipa Rodríguez Ballón (AQP)',
+            'IQT': 'Iquitos Coronel FAP Francisco Secada (IQT)',
+            'PIU': 'Piura Cap. FAP Guillermo Concha (PIU)',
+            'TRU': 'Trujillo Cap. FAP Carlos Martínez (TRU)',
+            'JUL': 'Juliaca Inca Manco Cápac (JUL)',
+            'PEM': 'Puerto Maldonado Padre Aldamiz (PEM)',
+            'CBB': 'Cochabamba Jorge Wilstermann (CBB)',
+            'SRE': 'Sucre Alcantarí Intl (SRE)',
+            'TJA': 'Tarija Capitán Oriel Lea Plaza (TJA)',
+            'CJC': 'Calama El Loa (CJC)',
+            'ANF': 'Antofagasta Andrés Sabella (ANF)',
+            'IQQ': 'Iquique Diego Aracena (IQQ)',
+            'PMC': 'Puerto Montt El Tepual (PMC)',
+            'PUQ': 'Punta Arenas Presidente Carlos Ibáñez (PUQ)',
+            'LSC': 'La Serena La Florida (LSC)',
+            'CCP': 'Concepción Carriel Sur (CCP)',
+            'CRD': 'Comodoro Rivadavia Intl (CRD)',
+            'RGL': 'Río Gallegos Intl (RGL)',
+            'PDP': 'Punta del Este Capitán de Corbeta (PDP)',
+            'AGT': 'Ciudad del Este Guaraní Intl (AGT)',
+            'SLZ': 'São Luís Marechal Cunha Machado (SLZ)',
+            'JPA': 'João Pessoa Pres. Castro Pinto (JPA)',
+            'AJU': 'Aracaju Santa Maria (AJU)',
+            'THE': 'Teresina Senador Petrônio Portella (THE)',
+            'UDI': 'Uberlândia Ten. Cel. Av. César Bombonato (UDI)',
+            'LDB': 'Londrina Gov. José Richa (LDB)',
+            'MGF': 'Maringá Regional (MGF)',
+            'JOI': 'Joinville-Lauro Carneiro de Loyola (JOI)',
+            'NVT': 'Navegantes–Ministro Victor Konder (NVT)',
+            'BPS': 'Porto Seguro Airport (BPS)',
+            'IOS': 'Ilhéus/Bahia-Jorge Amado (IOS)',
+            'PMW': 'Palmas–Brigadeiro Lysias Rodrigues (PMW)',
+            'PVH': 'Porto Velho–Gov. Jorge Teixeira (PVH)',
+            'RBR': 'Rio Branco–Plácido de Castro (RBR)',
+            'MCP': 'Macapá Intl Airport (MCP)',
+            'STM': 'Santarém–Maestro Wilson Fonseca (STM)',
+            'IMP': 'Imperatriz–Prefeito Renato Moreira (IMP)',
+            'MAB': 'Marabá Airport (MAB)',
+            'CGR': 'Campo Grande Intl (CGR)',
+            'RAO': 'Ribeirão Preto–Dr. Leite Lopes (RAO)',
+            'SJP': 'São José do Rio Preto (SJP)',
+            'XAP': 'Chapecó–Serafim Enoss Bertaso (XAP)',
+            // Central America
+            'SAP': 'San Pedro Sula Ramón Villeda Morales (SAP)',
+            'TGU': 'Tegucigalpa Toncontín (TGU)',
+            'XPL': 'Comayagua Palmerola Intl (XPL)',
+            'MGA': 'Managua Augusto C. Sandino (MGA)',
+            // Mexico
+            'CPE': 'Campeche Ing. Alberto Acuña Ongay (CPE)',
+            'CTM': 'Chetumal Intl Airport (CTM)',
+            'HUX': 'Huatulco Intl Airport (HUX)',
+            'PXM': 'Puerto Escondido Intl (PXM)',
+            'TPQ': 'Tepic Amado Nervo (TPQ)',
+            'UPN': 'Uruapan Intl Airport (UPN)',
+            'ZCL': 'Zacatecas Intl Airport (ZCL)',
+            // USA (Regional/GA Commercial)
+            'AZO': 'Kalamazoo/Battle Creek Intl (AZO)',
+            'SAF': 'Santa Fe Regional (SAF)',
+            'DRO': 'Durango-La Plata County (DRO)',
+            'MTJ': 'Montrose Regional (MTJ)',
+            'EGE': 'Eagle County Regional (EGE)',
+            'HDN': 'Yampa Valley (HDN)',
+            'FCA': 'Glacier Park Intl (FCA)',
+            'CPR': 'Casper/Natrona County (CPR)',
+            'RDD': 'Redding Municipal (RDD)',
+            'ACV': 'California Redwood Coast-Humboldt (ACV)',
+            'YAK': 'Yakutat Airport (YAK)',
+            'BET': 'Bethel Airport (BET)',
+            'OME': 'Nome Airport (OME)',
+            'OTZ': 'Ralph Wien Memorial (OTZ)',
+            'BRW': 'Wiley Post–Will Rogers Memorial (BRW)',
+            'ADK': 'Adak Airport (ADK)',
+            'DUT': 'Unalaska Airport (DUT)',
+            'SCC': 'Deadhorse Airport (SCC)',
+
+            // --- MIDDLE EAST & OCEANIA (Gaps) ---
+            'BSR': 'Basra Intl Airport (BSR)',
+            'NJF': 'Al Najaf Intl Airport (NJF)',
+            'MCY': 'Sunshine Coast Airport (MCY)',
+            'NTL': 'Newcastle Airport (NTL)',
+            'AVV': 'Avalon Airport (AVV)',
+            // --- RUSSIA & CIS (Major Gaps Filled) ---
+            'SVO': 'Moscow Sheremetyevo Intl (SVO)',
+            'DME': 'Moscow Domodedovo Intl (DME)',
+            'VKO': 'Moscow Vnukovo Intl (VKO)',
+            'LED': 'St. Petersburg Pulkovo (LED)',
+            'AER': 'Sochi Intl Airport (AER)',
+            'OVB': 'Novosibirsk Tolmachevo (OVB)',
+            'SVX': 'Yekaterinburg Koltsovo (SVX)',
+            'KZN': 'Kazan Intl Airport (KZN)',
+            'KRR': 'Krasnodar Pashkovsky (KRR)',
+            'UFA': 'Ufa Intl Airport (UFA)',
+            'KUF': 'Samara Kurumoch Intl (KUF)',
+            'VVO': 'Vladivostok Knevichi (VVO)',
+            'KHV': 'Khabarovsk Novy (KHV)',
+            'IKT': 'Irkutsk Intl Airport (IKT)',
+            'MRV': 'Mineralnye Vody Airport (MRV)',
+            'GYD': 'Baku Heydar Aliyev Intl (GYD)',
+            'EVN': 'Yerevan Zvartnots Intl (EVN)',
+            'TBS': 'Tbilisi Intl Airport (TBS)',
+            'MSQ': 'Minsk National Airport (MSQ)',
+
+            // --- CHINA (Tier 2/3 & Tourist Hubs) ---
+            'HAK': 'Haikou Meilan Intl (HAK)',
+            'SYX': 'Sanya Phoenix Intl (SYX)',
+            'HRB': 'Harbin Taiping Intl (HRB)',
+            'URC': 'Urumqi Diwopu Intl (URC)',
+            'KWL': 'Guilin Liangjiang Intl (KWL)',
+            'LJG': 'Lijiang Sanyi Intl (LJG)',
+            'JHG': 'Xishuangbanna Gasa (JHG)',
+            'TNA': 'Jinan Yaoqiang Intl (TNA)',
+            'CGQ': 'Changchun Longjia Intl (CGQ)',
+            'TYN': 'Taiyuan Wusu Intl (TYN)',
+            'NGB': 'Ningbo Lishe Intl (NGB)',
+            'WNZ': 'Wenzhou Longwan Intl (WNZ)',
+            'SJW': 'Shijiazhuang Zhengding (SJW)',
+
+            // --- SOUTH ASIA (Holiday & Major Hubs) ---
+            'MLE': 'Maldives Velana Intl (MLE)',
+            'GAN': 'Maldives Gan Intl (GAN)',
+            'CMB': 'Colombo Bandaranaike Intl (CMB)',
+            'HRI': 'Mattala Rajapaksa Intl (HRI)',
+            'DAC': 'Dhaka Hazrat Shahjalal (DAC)',
+            'ISB': 'Islamabad Intl Airport (ISB)',
+            'LHE': 'Lahore Allama Iqbal Intl (LHE)',
+            'KHI': 'Karachi Jinnah Intl (KHI)',
+            'SKT': 'Sialkot Intl Airport (SKT)',
+            'PEW': 'Peshawar Bacha Khan Intl (PEW)',
+            'IXZ': 'Port Blair Veer Savarkar (IXZ)',
+            'VTZ': 'Visakhapatnam Intl (VTZ)',
+            'VNS': 'Varanasi Lal Bahadur Shastri (VNS)',
+
+            // --- AFRICA (Central & West Capitals) ---
+            'LAD': 'Luanda Quatro de Fevereiro (LAD)',
+            'FIH': 'Kinshasa N\'Djili Intl (FIH)',
+            'BGF': 'Bangui M\'Poko Intl (BGF)',
+            'NDJ': 'N\'Djamena Intl Airport (NDJ)',
+            'NIM': 'Niamey Diori Hamani (NIM)',
+            'OUA': 'Ouagadougou Intl (OUA)',
+            'BKO': 'Bamako-Senou Intl (BKO)',
+            'CKY': 'Conakry Ahmed Sekou Toure (CKY)',
+            'FNA': 'Freetown Lungi Intl (FNA)',
+            'ROB': 'Monrovia Roberts Intl (ROB)',
+            'COO': 'Cotonou Cadjehoun (COO)',
+            'DLA': 'Douala Intl Airport (DLA)',
+            'NSI': 'Yaounde Nsimalen Intl (NSI)',
+            'LBV': 'Libreville Leon-Mba Intl (LBV)',
+            'BJL': 'Banjul Yundum Intl (BJL)',
+
+            // --- USA (Ski & Mountain Destinations) ---
+            'EGE': 'Eagle County Regional (EGE)',
+            'HDN': 'Yampa Valley/Steamboat (HDN)',
+            'MTJ': 'Montrose Regional (MTJ)',
+            'TEX': 'Telluride Regional (TEX)',
+            'GUC': 'Gunnison-Crested Butte (GUC)',
+            'DRO': 'Durango-La Plata County (DRO)',
+            'SUN': 'Friedman Memorial/Sun Valley (SUN)',
+            'COD': 'Yellowstone Regional/Cody (COD)',
+            'CPR': 'Casper/Natrona County (CPR)',
+            'GCC': 'Gillette-Campbell County (GCC)',
+            'IDA': 'Idaho Falls Regional (IDA)',
+
+            // --- EUROPE (Regional & Islands) ---
+            'JER': 'Jersey Airport (JER)',
+            'GCI': 'Guernsey Airport (GCI)',
+            'IOM': 'Isle of Man Airport (IOM)',
+            'INV': 'Inverness Airport (INV)',
+            'NWI': 'Norwich Airport (NWI)',
+            'BOH': 'Bournemouth Airport (BOH)',
+            'KOI': 'Kirkwall Airport (KOI)',
+            'LSI': 'Sumburgh Airport (LSI)',
+            'FAE': 'Vagar Airport/Faroe (FAE)',
+            'GOH': 'Nuuk Airport (GOH)',
+            'RMI': 'Federico Fellini/Rimini (RMI)',
+            'LIG': 'Limoges-Bellegarde (LIG)',
+            'PGF': 'Perpignan-Rivesaltes (PGF)',
+            'BZR': 'Beziers Cap d\'Agde (BZR)',
+            'LRH': 'La Rochelle-Ile de Re (LRH)',
+            'EGC': 'Bergerac Dordogne (EGC)',
+            'EIN': 'Eindhoven Airport (EIN)',
+            'RTM': 'Rotterdam The Hague (RTM)',
+            'MST': 'Maastricht Aachen (MST)',
+            'LGG': 'Liege Airport (LGG)',
+            'ANR': 'Antwerp Intl Airport (ANR)',
+
+            // --- LATIN AMERICA (Tier 2) ---
+            'IQQ': 'Iquique Diego Aracena (IQQ)',
+            'LSC': 'La Serena La Florida (LSC)',
+            'CCP': 'Concepcion Carriel Sur (CCP)',
+            'TRU': 'Trujillo Capitan FAP Martinez (TRU)',
+            'CBB': 'Cochabamba Jorge Wilstermann (CBB)',
+            'ASU': 'Asuncion Silvio Pettirossi (ASU)',
+            'MVD': 'Montevideo Carrasco Intl (MVD)',
+            'PDP': 'Punta del Este Capitán Corbeta (PDP)',
+
+            // --- MIDDLE EAST (Emerging) ---
+            'YNB': 'Yanbu Prince Abdul Mohsin (YNB)',
+            'ULH': 'AlUla Intl Airport (ULH)',
+            'NUM': 'Neom Bay Airport (NUM)',
+            'DQM': 'Duqm Intl Airport (DQM)',
+            'KHS': 'Khasab Airport (KHS)',
+            'SLL': 'Salalah Airport (SLL)'
+
+        };
+
+        const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+        const BAGGAGE_OPTIONS = [
+            "Not specified",
+            "None",
+            "1 Checked Bag",
+            "2 Checked Bags",
+            "3 Checked Bags"
+        ];
+
+        const App = () => {
+            const [rawPnr, setRawPnr] = useState('');
+            const [parsedData, setParsedData] = useState(null);
+            const [error, setError] = useState('');
+            const [copied, setCopied] = useState(false);
+            const [baggage, setBaggage] = useState(BAGGAGE_OPTIONS[0]);
+
+            const getFullDate = (pnrDate) => {
+                if (!pnrDate) return { formatted: 'N/A', raw: new Date() };
+                try {
+                    const day = parseInt(pnrDate.substring(0, 2));
+                    const monthStr = pnrDate.substring(2, 5).toUpperCase();
+                    const monthIdx = MONTHS.indexOf(monthStr);
+                    const year = new Date().getFullYear();
+                    const date = new Date(year, monthIdx, day);
+                    return {
+                        formatted: `${date.toLocaleDateString('en-US', { weekday: 'short' })} ${day} ${date.toLocaleDateString('en-US', { month: 'short' })}`,
+                        raw: date
+                    };
+                } catch { return { formatted: pnrDate, raw: new Date() }; }
+            };
+
+            const parseToMinutes = (timeStr) => {
+                if (!timeStr) return 0;
+                // Normalise clean digits
+                const cleanTime = timeStr.replace(/[^\dAP]/gi, '').toUpperCase();
+                const match = cleanTime.match(/(\d{1,4})([AP])?/);
+                if (!match) return 0;
+
+                let [_, digits, suffix] = match;
+
+                // Pad digits to 4 chars
+                if (digits.length === 3) digits = '0' + digits;
+                else if (digits.length === 2) digits = '00' + digits;
+                else if (digits.length === 1) digits = '000' + digits;
+
+                let h = parseInt(digits.substring(0, 2));
+                let m = parseInt(digits.substring(2, 4) || '0');
+
+                if (suffix === 'P' && h < 12) h += 12;
+                if (suffix === 'A' && h === 12) h = 0;
+
+                return h * 60 + m;
+            };
+
+            const formatTimeDisplay = (timeStr) => {
+                const totalMinutes = parseToMinutes(timeStr);
+                const h = Math.floor(totalMinutes / 60);
+                const m = totalMinutes % 60;
+                const displayH = h % 12 || 12;
+                const ampm = h >= 12 ? 'pm' : 'am';
+                return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
+            };
+
+            const calculateTransit = (f1, f2) => {
+                const arrTime = parseToMinutes(f1.arrTimeRaw);
+                const depTime = parseToMinutes(f2.depTimeRaw);
+                const arrDate = getFullDate(f1.arrDateRaw).raw;
+                const depDate = getFullDate(f2.dateRaw).raw;
+
+                const dayDiff = Math.round((depDate.getTime() - arrDate.getTime()) / (1000 * 60 * 60 * 24));
+                const transitMin = (depTime + (dayDiff * 1440)) - arrTime;
+
+                return { h: Math.floor(transitMin / 60), m: transitMin % 60, total: transitMin };
+            };
+
+            const segmentTypes = useMemo(() => {
+                if (!parsedData || !parsedData.flights.length) return [];
+                const flights = parsedData.flights;
+                const originalOrigin = flights[0].origin;
+                let turningPointIndex = flights.length;
+
+                for (let i = 1; i < flights.length; i++) {
+                    const travelsTowardsHome = flights[i].destination === originalOrigin;
+                    const startsFromAway = flights[i].origin !== flights[i - 1].destination;
+                    const transit = calculateTransit(flights[i - 1], flights[i]);
+
+                    if (travelsTowardsHome || (startsFromAway && i > 0) || transit.total > 2880) {
+                        turningPointIndex = i;
+                        break;
+                    }
+                }
+
+                const firstDepDate = getFullDate(flights[0].dateRaw).raw;
+                const now = new Date();
+                const diffHours = (firstDepDate - now) / (1000 * 60 * 60);
+                const isUrgent = diffHours <= 72 && diffHours >= -24;
+
+                return flights.map((_, i) => {
+                    if (i < turningPointIndex) return isUrgent ? 'urgent' : 'outbound';
+                    return 'return';
+                });
+            }, [parsedData]);
+
+            const parsePnr = (text) => {
+                if (!text || text.trim().length < 5) {
+                    setError("Input too short or empty.");
+                    setParsedData(null);
+                    return;
+                }
+                try {
+                    const lines = text.split('\n').filter(l => l.trim().length > 3);
+                    const passengers = [];
+                    const flights = [];
+
+                    lines.forEach(line => {
+                        // Passenger Regex
+                        const nameRegex = /(\d+)\.\s*([A-Z\s\-]+)\/([A-Z\s\-]+?)(?:\((ADT|CHD|INF|CHD\/[A-Z0-9]+)\))?(?=\s+\d+\.|$|\s{2,})/gi;
+                        const matches = [...line.matchAll(nameRegex)];
+
+                        if (matches.length > 0) {
+                            matches.forEach(match => {
+                                const [_, id, surname, given, type] = match;
+                                const formatName = (str) => str.trim().split(/[\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                                passengers.push({
+                                    id,
+                                    surname: surname.trim(),
+                                    given: given.trim(),
+                                    fullName: `${formatName(given)} ${formatName(surname)}`,
+                                    type: type ? type.replace(/[()]/g, '') : 'ADT'
+                                });
+                            });
+                            return;
+                        }
+
+                        // Robust Flight Segment Regex
+                        // Optimized for AC8215 and TK formats (DK1, joined route codes)
+                        // Capture Groups: 1=SeqNo, 2=Airline, 3=FltNo, 4=Class, 5=Date, 6=DayIndicator, 7=Route, 8=Status, 9=Remainder
+                        const flightMatch = line.match(/^\s*(\d+)\s+([A-Z0-9]{2})\s*(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{2}[A-Z]{3})\s+([\d*]+)\s*([A-Z]{6})\s+([A-Z]{2}\d)\s+(.*)$/i);
+
+                        if (flightMatch) {
+                            const [_, id, carrier, flightNo, cabin, dateStr, dayInd, route, status, remainder] = flightMatch;
+
+                            // Capture times and possible explicit arrival date (e.g., 17FEB)
+                            const timeMatches = remainder.match(/(\d{3,4}[AP]?)\s*(\d{3,4}[AP]?(?:\+1)?)(?:\s+(\d{2}[A-Z]{3}))?/i);
+
+                            if (timeMatches) {
+                                let depTimeRaw = timeMatches[1];
+                                let arrTimeRaw = timeMatches[2];
+                                let arrDateRaw = timeMatches[3] || dateStr; // Use explicit arrival date if found
+
+                                if (arrTimeRaw.includes('+1') && !timeMatches[3]) {
+                                    const d = getFullDate(dateStr).raw;
+                                    d.setDate(d.getDate() + 1);
+                                    const nextDay = d.getDate().toString().padStart(2, '0');
+                                    const nextMonth = MONTHS[d.getMonth()];
+                                    arrDateRaw = `${nextDay}${nextMonth}`;
+                                }
+
+                                flights.push({
+                                    carrier: carrier.toUpperCase(),
+                                    carrierFull: AIRLINE_NAMES[carrier.toUpperCase()] || `Airline ${carrier}`,
+                                    flightNo: flightNo.replace(/^0+/, ''),
+                                    dateRaw: dateStr,
+                                    date: getFullDate(dateStr).formatted,
+                                    origin: route.substring(0, 3).toUpperCase(),
+                                    destination: route.substring(3, 6).toUpperCase(),
+                                    depTimeRaw,
+                                    arrTimeRaw,
+                                    arrDateRaw
+                                });
+                            }
+                        }
+                    });
+
+                    if (flights.length === 0 && passengers.length === 0) throw new Error("Could not find names or flight segments. Check format.");
+                    setParsedData({ flights, passengers });
+                    setError('');
+                } catch (err) {
+                    setError(err.message);
+                    setParsedData(null);
+                }
+            };
+
+            const handleCopy = () => {
+                if (!parsedData) return;
+                let text = "";
+
+                if (parsedData.passengers.length > 0) {
+                    const guestNames = parsedData.passengers.map(p => p.fullName).join('. ');
+                    text += `Itinerary for: ${guestNames}.\nTotal Guests: ${parsedData.passengers.length}\n`;
+                    text += `Baggage Allowance: ${baggage}\n`;
+                    text += "------------------------------------------------------------------------------------------\n\n";
+                }
+
+                parsedData.flights.forEach((f, i) => {
+                    text += `${f.date} - ${f.carrierFull} ${f.flightNo}\n`;
+                    text += `Departing: ${AIRPORT_NAMES[f.origin] || f.origin} at ${formatTimeDisplay(f.depTimeRaw)}\n`;
+
+                    let arrDateSuffix = "";
+                    if (f.arrDateRaw !== f.dateRaw) {
+                        const ad = getFullDate(f.arrDateRaw).raw;
+                        arrDateSuffix = ` (on the ${ad.getDate()} ${MONTHS[ad.getMonth()].charAt(0) + MONTHS[ad.getMonth()].slice(1).toLowerCase()})`;
+                    }
+
+                    text += `Arriving: ${AIRPORT_NAMES[f.destination] || f.destination} at ${formatTimeDisplay(f.arrTimeRaw)}${arrDateSuffix}\n`;
+
+                    if (parsedData.flights[i + 1]) {
+                        const t = calculateTransit(f, parsedData.flights[i + 1]);
+                        if (t.total < 2880) {
+                            // Threshold for "Long Connection" set to 300 minutes (5 hours) based on preference
+                            const label = t.total <= 90 ? "Short Connection--" : t.total >= 300 ? "Long Connection--" : "";
+                            text += `--------${label}Transit Time: ${t.h}h ${t.m}m--------\n`;
+                        } else {
+                            text += "------------------------------------------------------------------------------------------\n";
+                        }
+                    } else {
+                        text += "------------------------------------------------------------------------------------------\n";
+                    }
+                });
+
+                const textArea = document.createElement("textarea");
+                textArea.value = text.trim();
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            const getCardStyle = (type) => {
+                switch (type) {
+                    case 'urgent': return 'bg-red-50 border-red-200';
+                    case 'outbound': return 'bg-blue-50 border-blue-200';
+                    case 'return': return 'bg-emerald-50 border-emerald-200';
+                    default: return 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg';
+                }
+            };
+
+            return (
+                <div className="min-h-screen custom-scroll overflow-y-auto flex flex-col">
+                    <div className="max-w-[1440px] mx-auto w-full px-4 sm:px-6 md:px-12 py-8 md:py-12 flex-grow">
+                        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] xl:grid-cols-[320px_1fr_320px] gap-6 md:gap-8">
+
+                            {/* Left Panel */}
+                            <aside className="order-2 lg:order-1 flex flex-col gap-6 animate-in fade-in slide-in-from-left-4 duration-500 pt-8 lg:pt-0">
+                                {parsedData && parsedData.passengers.length > 0 && (
+                                    <div className="bg-slate-900 rounded-[24px] sm:rounded-[28px] p-6 sm:p-8 text-white shadow-xl border border-slate-800">
+                                        <div className="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4">
+                                            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/40 shrink-0">
+                                                <UsersIcon />
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] sm:text-[10px] font-black text-blue-400 uppercase tracking-widest">Guest List</p>
+                                                <p className="text-base sm:text-lg font-black tracking-tight leading-none">{parsedData.passengers.length} Total</p>
+                                            </div>
+                                        </div>
+                                        <ul className="space-y-4 max-h-[300px] lg:max-h-none overflow-y-auto custom-scroll pr-2">
+                                            {parsedData.passengers.map((p, idx) => (
+                                                <li key={idx} className="flex flex-col">
+                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Guest {idx + 1}</span>
+                                                    <span className="text-xs sm:text-sm font-bold tracking-tight text-white">{p.fullName}.</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {parsedData && (
+                                    <div className="bg-white rounded-[24px] sm:rounded-[28px] p-6 sm:p-8 shadow-xl shadow-slate-200/50 border border-slate-100">
+                                        <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
+                                            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
+                                                <LuggageIcon />
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuration</p>
+                                                <p className="text-base sm:text-lg font-black tracking-tight leading-none text-slate-900">Baggage</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            {BAGGAGE_OPTIONS.map((opt) => (
+                                                <button
+                                                    key={opt}
+                                                    onClick={() => setBaggage(opt)}
+                                                    className={`text-left px-4 py-3 rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-tight transition-all ${baggage === opt
+                                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                                                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                                                        }`}
+                                                >
+                                                    {opt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </aside>
+
+                            {/* Main Content */}
+                            <div className="order-1 lg:order-2 flex-1 w-full min-w-0 pt-8 sm:pt-12">
+                                <div className="relative bg-white rounded-[32px] shadow-2xl shadow-blue-900/5 border border-slate-100 mb-8 md:mb-12">
+
+                                    {/* Floating Logo Badge - Overlapping the top */}
+                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-gradient-to-br from-blue-600 to-slate-900 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-900/20 transform -rotate-3 hover:rotate-0 transition-transform duration-500 border-4 border-slate-50">
+                                        <span className="text-white scale-125"><PlaneIcon /></span>
+                                    </div>
+
+                                    <div className="pt-14 pb-8 px-5 sm:px-8 flex flex-col items-center">
+                                        {/* Header Text - Now inside the card */}
+                                        <div className="text-center mb-8">
+                                            <h1 className="text-3xl sm:text-4xl font-black tracking-tight uppercase text-slate-900 leading-none">PNR Expert <span className="text-blue-600">Pro</span></h1>
+                                            <p className="text-slate-400 font-bold tracking-widest uppercase text-[9px] sm:text-[10px] mt-2">Smart Segment Processing</p>
+                                        </div>
+
+                                        <div className="w-full">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-lg">GDS Input</span>
+                                            </div>
+                                            <textarea
+                                                className={`w-full p-4 sm:p-6 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-blue-500 focus:bg-white focus:shadow-lg focus:shadow-blue-500/10 outline-none transition-all mono text-xs sm:text-sm leading-relaxed ${parsedData ? 'h-32' : 'h-48'}`}
+                                                placeholder="Paste Amadeus/Sabre names and segments here..."
+                                                value={rawPnr}
+                                                onChange={(e) => {
+                                                    setRawPnr(e.target.value);
+                                                    if (e.target.value.length < 5) setParsedData(null);
+                                                }}
+                                            />
+                                            <button
+                                                onClick={() => parsePnr(rawPnr)}
+                                                className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest py-4 rounded-2xl shadow-lg hover:shadow-xl hover:shadow-slate-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                            >
+                                                {parsedData ? 'Update Decoder' : 'Decode Itinerary'}
+                                            </button>
+                                            {error && <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-xl text-[9px] sm:text-[10px] font-black uppercase border border-red-100 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"></div>Error: {error}</div>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {parsedData && parsedData.flights.length > 0 && (
+                                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 mb-24 lg:mb-12">
+                                        {parsedData.flights.map((f, i) => (
+                                            <React.Fragment key={i}>
+                                                <div className={`rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 border shadow-sm hover:shadow-md pnr-card ${getCardStyle(segmentTypes[i])}`}>
+                                                    <div className="flex justify-between items-start mb-6 sm:mb-8">
+                                                        <div className="min-w-0 pr-2">
+                                                            <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 truncate">
+                                                                {f.date}
+                                                            </div>
+                                                            <h3 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+                                                                {f.carrierFull} <span className="opacity-40">{f.flightNo}</span>
+                                                            </h3>
+                                                        </div>
+                                                        <div className={`shrink-0 px-3 sm:px-4 py-1.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase shadow-sm ${segmentTypes[i] === 'urgent' ? 'bg-red-600 text-white shadow-red-500/30' :
+                                                            segmentTypes[i] === 'outbound' ? 'bg-blue-600 text-white shadow-blue-500/30' : 'bg-emerald-600 text-white shadow-emerald-500/30'
+                                                            }`}>
+                                                            {segmentTypes[i] === 'urgent' ? 'Urgent' : segmentTypes[i] === 'outbound' ? 'Departure' : 'Return'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                                                        <div className="p-4 sm:p-6 bg-white/60 rounded-2xl border border-black/5 hover:border-black/10 transition-colors">
+                                                            <div className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Departure</div>
+                                                            <div className="text-xs sm:text-sm font-bold text-slate-800 mb-1 leading-tight">{AIRPORT_NAMES[f.origin] || f.origin}</div>
+                                                            <div className="text-2xl sm:text-3xl font-black text-slate-900 mono">{formatTimeDisplay(f.depTimeRaw)}</div>
+                                                        </div>
+                                                        <div className="p-4 sm:p-6 bg-white/60 rounded-2xl border border-black/5 hover:border-black/10 transition-colors">
+                                                            <div className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Arrival</div>
+                                                            <div className="text-xs sm:text-sm font-bold text-slate-800 mb-1 leading-tight">{AIRPORT_NAMES[f.destination] || f.destination}</div>
+                                                            <div className="text-2xl sm:text-3xl font-black text-slate-900 mono flex flex-wrap items-baseline gap-2">
+                                                                {formatTimeDisplay(f.arrTimeRaw)}
+                                                                {f.arrDateRaw !== f.dateRaw && <span className="text-[8px] sm:text-[10px] text-red-500 font-black uppercase">+1 Day</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {parsedData.flights[i + 1] && (
+                                                    <div className="flex justify-center py-1 sm:py-2">
+                                                        {(() => {
+                                                            const t = calculateTransit(f, parsedData.flights[i + 1]);
+                                                            if (t.total < 2880) {
+                                                                const isShort = t.total <= 90;
+                                                                const isLong = t.total >= 300;
+                                                                return (
+                                                                    <div className={`px-5 sm:px-8 py-2.5 rounded-2xl flex items-center gap-2 sm:gap-3 shadow-xl border ${isShort ? 'bg-red-900 border-red-700 shadow-red-900/20' : 'bg-slate-900 border-slate-700 shadow-slate-900/20'}`}>
+                                                                        <span className={`${isShort ? 'text-red-400' : 'text-amber-400'} scale-90 sm:scale-100`}><ClockIcon /></span>
+                                                                        <span className="text-[9px] sm:text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                                                                            {isShort ? "Short Connection: " : isLong ? "Long Connection: " : "Transit: "} {t.h}h {t.m}m
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return <div className="h-6 sm:h-8 w-0.5 bg-slate-200/60 dashed-line"></div>;
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="order-3 hidden xl:block"></div>
+                        </div>
+                    </div>
+
+                    {parsedData && (
+                        <div class="fixed bottom-0 sm:bottom-0 left-0 right-0 w-full  px-0  z-0">
+                            <div class="bg-slate-900/95 backdrop-blur-md sm:rounded-[0dpx] p-1 sm:p-2 shadow-2xl flex items-center justify-between border-t sm:border border-slate-700/50 ring-1 ring-white/10">
+                                <div className="pl-4 sm:pl-0">
+                                    <h4 className="text-white font-black text-xs sm:text-sm uppercase tracking-tight">Format Ready</h4>
+                                    <p className="text-slate-400 text-[8px] sm:text-[10px] font-bold uppercase tracking-widest truncate max-w-[120px] sm:max-w-none">
+                                        {parsedData.passengers.length} Guests • {baggage}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleCopy}
+                                    className={`flex items-center gap-2 sm:gap-3 px-4 sm:px-8 py-3 sm:py-4 rounded-xl font-black text-[9px] sm:text-[11px] uppercase tracking-widest transition-all whitespace-nowrap ${copied ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white text-slate-900 hover:bg-blue-50 hover:scale-105'
+                                        }`}
+                                >
+                                    {copied ? <><CheckIcon /> Copied!</> : <><CopyIcon /> Copy Text</>}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

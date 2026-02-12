@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airline Support Finder Pro</title>
+
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M10 80 L35 20 L50 50 L65 20 L90 80 L75 80 L65 55 L50 85 L35 55 L25 80 Z' fill='%232563eb'/><path d='M5 85 L95 85 L85 90 L15 90 Z' fill='%230f172a'/></svg>">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --brand-primary: #2563eb;
+            --brand-dark: #0f172a;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        body {
+            background-color: #ffffff;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: #1e293b;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .airline-card {
+            animation: slideIn 0.3s ease-out forwards;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid #f1f5f9;
+        }
+
+        .airline-card:hover {
+            background: #ffffff;
+            border-color: #e2e8f0;
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .search-bar:focus-within {
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        #copyToast {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            bottom: -50px;
+            opacity: 0;
+        }
+
+        #copyToast.show {
+            bottom: 24px;
+            opacity: 1;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        /* Floating Notepad Button */
+        #floatingNotepadBtn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 20px;
+            background-color: #0f172a;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.4);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 90;
+            font-weight: 900;
+            font-size: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #floatingNotepadBtn:hover {
+            transform: translateY(-4px) scale(1.05);
+            background-color: #1e293b;
+        }
+
+        #floatingNotepadBtn:active {
+            transform: scale(0.95);
+        }
+
+        /* Toggle Switch Styling */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e2e8f0;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #2563eb;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+
+<body class="h-screen flex overflow-hidden">
+
+    <!-- Notification -->
+    <div id="copyToast"
+        class="fixed left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 z-[200] border border-slate-700">
+        <div class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-[10px]">✓</div>
+        <span id="toastMessage" class="text-xs font-bold tracking-tight uppercase">Copied to Clipboard</span>
+    </div>
+
+    <!-- Floating Notepad Button -->
+    <button id="floatingNotepadBtn" onclick="openModal('notepadModal')" title="Shift + R to Open">
+        N
+    </button>
+
+    <!-- Availability Modal -->
+    <div id="availabilityModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">Get Availability</h2>
+                </div>
+                <button onclick="closeModal('availabilityModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+
+            <div class="p-8 space-y-6">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Paste Amadeus
+                        Itinerary</label>
+                    <textarea id="availInput" rows="6" placeholder="Paste itinerary segments here..."
+                        class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl mono text-sm outline-none focus:border-blue-600 resize-none"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cabin
+                            Preference</label>
+                        <input type="text" id="availCabin" value="KM" placeholder="e.g. KM, KC, KY"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600 uppercase">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">New Date
+                            (Optional)</label>
+                        <input type="text" id="availNewDate" placeholder="e.g. 25OCT"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600 uppercase">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="generateAvailability()"
+                            class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20">Generate
+                            Commands</button>
+                    </div>
+                </div>
+
+                <div id="availOutputContainer" class="hidden space-y-4">
+                    <div class="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Amadeus
+                                Commands</span>
+                        </div>
+                        <div id="availResults" class="space-y-3">
+                            <!-- Results will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notepad Modal -->
+    <div id="notepadModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-5xl h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-black text-sm">
+                        N</div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">Personal Notepad<h3>Press
+                            Shift+R to open/close</h3>
+                    </h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="addNote()" id="addNoteBtn"
+                        class="px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all flex items-center gap-2">
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="3">
+                            <path d="M12 5v14m-7-7h14" />
+                        </svg>
+                        Add Note
+                    </button>
+                    <button onclick="addSnippetNote()"
+                        class="px-4 py-2 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2">
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="3">
+                            <path
+                                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4h-4m0 0l2-2m-2 2l2 2" />
+                        </svg>
+                        Copiable Notes
+                    </button>
+                    <button onclick="closeModal('notepadModal')"
+                        class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+                </div>
+            </div>
+
+            <div id="notesGrid"
+                class="flex-1 p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto custom-scroll bg-slate-50/50">
+                <!-- Notes will be injected here -->
+            </div>
+
+            <div class="p-4 bg-white border-t flex justify-center">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Shift + R to Toggle • Enter x2
+                    to create snippet in Copiable Notes</p>
+            </div>
+        </div>
+    </div>
+    <!-- EMD Builder Modal (NEW) -->
+    <div id="emdModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">EMD Builder</h2>
+                </div>
+                <button onclick="closeModal('emdModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+
+            <div class="p-8 overflow-y-auto custom-scroll space-y-6">
+                <!-- Input Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <!-- Row 1 -->
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Airline Code</label>
+                        <input type="text" id="emdAirlineCode" placeholder="XX"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500 uppercase">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Service Code</label>
+                        <input type="text" id="emdServiceCode" value="PENF" placeholder="PENF"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500 uppercase">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Origin</label>
+                        <input type="text" id="emdOrigin" placeholder="YUL"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500 uppercase">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Date</label>
+                        <input type="text" id="emdDate" placeholder="20SEP"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500 uppercase">
+                    </div>
+
+                    <!-- Row 2 -->
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Line Num (TSM)</label>
+                        <input type="text" id="emdLineNum" value="1" placeholder="1"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">EMD Num (TMI)</label>
+                        <input type="text" id="emdNum" value="1" placeholder="1"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Amount</label>
+                        <input type="text" id="emdAmount" placeholder="0.00"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Form of Payment</label>
+                        <input type="text" id="emdFop" placeholder="CCVI... or CASH"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500 uppercase">
+                    </div>
+
+                    <!-- Row 3 -->
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Airline Name</label>
+                        <input type="text" id="emdAirlineName" placeholder="AIR CANADA"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Location</label>
+                        <input type="text" id="emdLocation" placeholder="YUL"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500 uppercase">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Pax Num</label>
+                        <input type="text" id="emdPaxNum" value="1" placeholder="1"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500">
+                    </div>
+
+                    <!-- Row 4 -->
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Associated Ticket</label>
+                        <input type="text" id="emdTkt" placeholder="014-1234567890"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Indicator</label>
+                        <select id="emdIndicator"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 appearance-none">
+                            <option value="YI">YI (International)</option>
+                            <option value="YD">YD (Domestic)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Output Area -->
+                <div class="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Generated
+                            Commands</span>
+                        <button id="btnResetEmd"
+                            class="text-[10px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Reset
+                            Form</button>
+                    </div>
+                    <div id="emdOutput" class="space-y-2">
+                        <!-- Commands injected here -->
+                        <div class="p-2 text-slate-500 text-sm italic">Start typing to generate commands...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- FXD Expert Modal -->
+    <div id="fxdModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">FXD Command Expert</h2>
+                </div>
+                <button onclick="closeModal('fxdModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+
+            <div class="p-8 space-y-6 overflow-y-auto max-h-[70vh] custom-scroll">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Fare Type</label>
+                        <select id="fxdFareType"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600 appearance-none">
+                            <option value="published">Published Fare</option>
+                            <option value="private">Private Fare (/r,u)</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Carrier Airline</label>
+                        <input type="text" id="fxdCarrier" placeholder="e.g. AT"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600 uppercase">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <div class="flex flex-col">
+                        <span class="text-[11px] font-black text-slate-700 uppercase tracking-tight">Include
+                            Baggage</span>
+                        <span class="text-[9px] text-slate-400 font-bold uppercase">Add /sbf-1 suffix</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="fxdBags">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between border-t pt-6">
+                    <div class="flex flex-col">
+                        <span class="text-xs font-black text-slate-900 uppercase tracking-tight">Advanced Mode</span>
+                        <span class="text-[9px] text-slate-400 font-bold uppercase">Multi-segment / Stopover
+                            building</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="fxdAdvancedToggle" onchange="toggleFXDMode()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div id="fxdBasicMode" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Origin</label>
+                            <input type="text" id="fxdOrigin" placeholder="YUL"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none uppercase">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Destination</label>
+                            <input type="text" id="fxdDest" placeholder="CMN"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none uppercase">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Departure Date</label>
+                            <input type="text" id="fxdDepDate" placeholder="22FEB"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none uppercase">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Return Date</label>
+                            <input type="text" id="fxdRetDate" placeholder="08MAR"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none uppercase">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fxdAdvancedMode" class="hidden space-y-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Main Origin</label>
+                        <input type="text" id="fxdAdvOrigin" placeholder="YUL"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none uppercase">
+                    </div>
+                    <div id="fxdSegmentsList" class="space-y-3"></div>
+                    <button onclick="addFXDSegment()"
+                        class="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:border-blue-400 hover:text-blue-500 transition-all">
+                        + Add Segment
+                    </button>
+                </div>
+
+                <div class="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Generated Amadeus
+                            Command</span>
+                        <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    </div>
+                    <div id="fxdOutput"
+                        class="mono text-white text-sm break-all bg-slate-800/50 p-4 rounded-xl border border-slate-700 min-h-[50px] flex items-center">
+                        FXD...
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="generateFXD()"
+                            class="py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Generate</button>
+                        <button onclick="copyToClipboard(document.getElementById('fxdOutput').innerText)"
+                            class="py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Copy
+                            Command</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Break Reschedule Modal -->
+    <div id="breakModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-700 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">Break Reschedule</h2>
+                </div>
+                <button onclick="closeModal('breakModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+            <div class="p-8 space-y-5">
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase">Agent Name</label>
+                    <input type="text" id="breakName" placeholder="Full name"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase">Break / Lunch</label>
+                    <select id="breakType"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600 appearance-none">
+                        <option value="break 1">break 1</option>
+                        <option value="break 2">break 2</option>
+                        <option value="lunch" selected>lunch</option>
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase">Calabrio Scheduled Time</label>
+                    <input type="text" id="breakTime" placeholder="e.g. 6:30:00 PM"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase">Reason to Reschedule</label>
+                    <input type="text" id="breakReason" value="long interaction" placeholder="Reason..."
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="pt-4 grid grid-cols-2 gap-4">
+                    <button onclick="generateBreakReschedule()"
+                        class="py-3 px-6 bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-800 transition-all shadow-lg shadow-blue-900/20">Generate
+                        & Copy</button>
+                    <button onclick="closeModal('breakModal')"
+                        class="py-3 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Generator Modal -->
+    <!-- Replace the existing noteModal section in index.html with this updated version -->
+
+    <div id="noteModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">Note Generator</h2>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase">Shift + E to toggle</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('noteModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+            <div class="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x">
+                <div class="flex-1 p-8 space-y-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Service Ticket ID (CAC ZD
+                            ID)</label>
+                        <input type="text" id="noteTicket" placeholder="e.g. 1234567"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-emerald-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Situation (S)</label>
+                        <textarea id="noteS" rows="2" placeholder="What is the guest calling about?"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 resize-none"></textarea>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Action (A)</label>
+                        <textarea id="noteA" rows="2" placeholder="What steps did you take?"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 resize-none"></textarea>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Outcome (O)</label>
+                        <textarea id="noteO" rows="2" placeholder="What was the final result?"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 resize-none"></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
+                        <button onclick="generateAndCopyNote()"
+                            class="py-3 px-4 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20">Copy
+                            Note</button>
+                        <button onclick="saveCurrentAsTemplate()"
+                            class="py-3 px-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20">Save
+                            to Templates</button>
+                        <button onclick="clearNoteFields()"
+                            class="py-3 px-4 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Clear
+                            Form</button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Template Sidebar -->
+                <div class="w-full md:w-80 bg-slate-50/50 p-8 flex flex-col h-[520px]">
+                    <span
+                        class="text-[10px] font-black text-slate-400 uppercase tracking-widest block border-b pb-2 mb-4">Quick
+                        Templates</span>
+                    <div id="templateContainer" class="flex-1 flex flex-col gap-3 overflow-y-auto custom-scroll pr-1">
+                        <!-- Templates are injected here by casenotes.js -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Airline Request Modal -->
+    <div id="airlineRequestModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">Airline Support Request
+                    </h2>
+                </div>
+                <button onclick="closeModal('airlineRequestModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+            <div id="requestForm" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto custom-scroll">
+                <div class="md:col-span-2 space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nature of
+                        Request</label>
+                    <select id="reqType"
+                        class="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm outline-none focus:border-blue-600 font-bold"
+                        onchange="toggleRequestFields()">
+                        <option value="sch_change_exchange">Waiver due to Schedule Change (Exchange)</option>
+                        <option value="sch_change_refund">Waiver due to Schedule Change (Refund)</option>
+                        <option value="medical">Medical Waiver Request</option>
+                        <option value="death">Death Waiver Request</option>
+                        <option value="name_correction">Name Correction</option>
+                        <option value="reopen">Reopen Ticket Status</option>
+                        <option value="other">Other Request</option>
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">PNR (Record
+                        Locator)</label>
+                    <input type="text" id="reqPnr" placeholder="e.g. ABCXYZ"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Travel Date</label>
+                    <input type="text" id="reqTravelDate" placeholder="e.g. 15OCT"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="md:col-span-2 space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Passenger Name(s)
+                        <span class="text-[9px] text-blue-500 lowercase">(Use 2+ spaces to separate
+                            individuals)</span></label>
+                    <input type="text" id="reqPaxNames" placeholder="DOE/JOHN MAX  DOE/JANE"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="md:col-span-2 space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ticket Number(s)
+                        <span class="text-[9px] text-blue-500 lowercase">(Use 2+ spaces to separate)</span></label>
+                    <input type="text" id="reqTkts" placeholder="0012345678901  0012345678902"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1" id="fieldNoShow">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">No Show
+                        Status</label>
+                    <input type="text" id="reqNoShow" placeholder="e.g. No"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1 hidden" id="fieldRefundType">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Type of
+                        Refund</label>
+                    <select id="reqRefundType"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600">
+                        <option value="Full">Full Refund</option>
+                        <option value="Partial">Partial Refund</option>
+                    </select>
+                </div>
+                <div class="space-y-1 hidden" id="fieldAffectedFlights">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Affected Flight
+                        Number(s)</label>
+                    <input type="text" id="reqAffectedFlights" placeholder="e.g. AC123"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1 hidden" id="fieldNewDates">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">New Travel
+                        Dates/Route</label>
+                    <input type="text" id="reqNewDates" placeholder="e.g. 20OCT"
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600">
+                </div>
+                <div class="space-y-1 hidden" id="fieldCorrectName">
+                    <label
+                        class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-emerald-600">Correct
+                        Name(s)</label>
+                    <input type="text" id="reqCorrectName" placeholder="Correct Spelling..."
+                        class="w-full px-4 py-3 bg-slate-50 border border-emerald-200 rounded-xl text-sm outline-none focus:border-emerald-600 font-bold">
+                </div>
+                <div class="space-y-1 hidden" id="fieldDocSubmitted">
+                    <label
+                        class="text-[10px] font-black text-slate-400 uppercase tracking-widest text-emerald-600">Document
+                        Submitted</label>
+                    <input type="text" id="reqDocSubmitted" placeholder="e.g. Passport Copy / Marriage Cert"
+                        class="w-full px-4 py-3 bg-slate-50 border border-emerald-200 rounded-xl text-sm outline-none focus:border-emerald-600">
+                </div>
+                <div class="md:col-span-2 space-y-1 hidden" id="fieldOtherNature">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Request Details /
+                        Free flow remarks</label>
+                    <textarea id="reqOtherText" rows="3" placeholder="Enter the reason for your request..."
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600 resize-none"></textarea>
+                </div>
+            </div>
+            <div id="requestPreview" class="hidden flex-1 p-8 bg-slate-50 overflow-y-auto custom-scroll">
+                <div class="mb-4 text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
+                    </svg>
+                    Preview Mode: Click anywhere inside to edit text manually
+                </div>
+                <div class="bg-white p-6 rounded-2xl border-2 border-dashed border-blue-200 shadow-inner min-h-[300px] outline-none"
+                    id="previewContent" contenteditable="true"></div>
+            </div>
+            <div class="p-6 border-t bg-white flex justify-between gap-4">
+                <button id="btnBack" onclick="toggleRequestPreview(false)"
+                    class="hidden py-3 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Edit
+                    Details</button>
+                <div class="flex-1"></div>
+                <button id="btnResetReq" onclick="resetRequestForm()"
+                    class="py-3 px-6 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all">Clear
+                    Form</button>
+                <button id="btnGenerate" onclick="generateRequestTable()"
+                    class="py-3 px-8 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20">Generate
+                    Request</button>
+                <button id="btnCopyRequest" onclick="copyRequestToClipboard()"
+                    class="hidden py-3 px-8 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20">Copy
+                    for Email</button>
+                <button id="btnCopyRequestHtml"
+                    class="hidden py-3 px-8 bg-purple-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg shadow-purple-900/20">Copy
+                    HTML</button>
+            </div>
+        </div>
+    </div>
+    <!-- SR DOCS Modal -->
+    <div id="srDocsModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-tighter">Advance Passenger Info</h2>
+                </div>
+                <button onclick="closeModal('srDocsModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+            <div class="p-8 space-y-4 max-h-[70vh] overflow-y-auto custom-scroll">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Airline Code</label>
+                        <input type="text" id="srAirline" placeholder="AC"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Pass. Ref (P1/P2)</label>
+                        <input type="text" id="srPaxRef" placeholder="P1"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Date of Birth</label>
+                        <input type="text" id="srDob" placeholder="02OCT93"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Gender</label>
+                        <select id="srGender"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500 appearance-none">
+                            <option value="M">M (Male)</option>
+                            <option value="F">F (Female)</option>
+                            <option value="MI">MI (Male Infant)</option>
+                            <option value="FI">FI (Female Infant)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Surname</label>
+                        <input type="text" id="srSurname" placeholder="SMITH"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase">Given Name</label>
+                        <input type="text" id="srGiven" placeholder="JOHN"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-100">
+                    <div
+                        class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <span>Passport Details (Optional)</span>
+                        <div class="h-px bg-slate-200 flex-1"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Issuing Country</label>
+                            <input type="text" id="srIssue" placeholder="USA"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Passport Number</label>
+                            <input type="text" id="srPassNum" placeholder="N12345678"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Nationality</label>
+                            <input type="text" id="srNat" placeholder="USA"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase">Expiry Date</label>
+                            <input type="text" id="srExpiry" placeholder="15OCT28"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-purple-500">
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-slate-900 p-4 rounded-2xl">
+                    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Amadeus Command (SR
+                        DOCS)</div>
+                    <div class="flex items-center justify-between gap-4">
+                        <div id="srOutput" class="mono text-purple-400 text-sm break-all">SR DOCS...</div>
+                        <button onclick="copyToClipboard(document.getElementById('srOutput').innerText)"
+                            class="shrink-0 bg-purple-600 text-white p-2.5 rounded-xl hover:bg-purple-700 transition-all shadow-lg">
+                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Airport Time & Zulu Modal -->
+    <div id="airportTimeModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-[#0f172a] text-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-black uppercase tracking-tighter">Airport Time & Zulu Sync</h2>
+                </div>
+                <button onclick="closeModal('airportTimeModal')"
+                    class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-red-900/50 hover:text-red-500 transition-colors">✕</button>
+            </div>
+            <div class="p-8 space-y-8 overflow-y-auto custom-scroll max-h-[80vh]">
+                <div class="space-y-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-1 h-4 bg-blue-500 rounded-full"></div>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Airport
+                            Search</span>
+                    </div>
+                    <div class="flex gap-3">
+                        <input type="text" id="airportCodeInput" placeholder="Enter IATA/ICAO (e.g. YYZ, EGLL, DXB)"
+                            class="flex-1 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl mono text-sm outline-none focus:border-blue-500 transition-all uppercase"
+                            oninput="updateAirportTime()">
+                        <div
+                            class="px-6 py-3 bg-slate-900 border border-slate-800 rounded-xl flex flex-col justify-center min-w-[140px]">
+                            <span class="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Zulu
+                                (UTC)</span>
+                            <span id="zuluLiveClock" class="mono text-sm font-black text-blue-400">00:00:00</span>
+                        </div>
+                    </div>
+                    <div id="airportTimeDisplay" class="hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div
+                            class="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700 shadow-inner">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 id="displayAirportName" class="text-xs font-black text-slate-300 uppercase">
+                                        Toronto Pearson Intl</h3>
+                                    <p id="displayAirportTz" class="text-[9px] font-bold text-slate-500 mono">
+                                        America/Toronto (UTC-5)</p>
+                                </div>
+                                <div class="bg-blue-600/10 text-blue-500 text-[10px] font-black px-2 py-1 rounded border border-blue-500/20 uppercase"
+                                    id="displayAirportCode">YYZ</div>
+                            </div>
+                            <div class="text-center py-4">
+                                <div id="displayAirportLocalTime"
+                                    class="mono text-5xl font-black tracking-tighter text-white drop-shadow-lg">00:00:00
+                                </div>
+                                <div id="displayAirportLocalDate"
+                                    class="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">
+                                    Thursday, Feb 5, 2026</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-6 border-t border-slate-800 space-y-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-1 h-4 bg-emerald-500 rounded-full"></div>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Zulu to Local
+                            Converter</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black text-slate-500 uppercase">Zulu Date</label>
+                            <input type="date" id="convZuluDate"
+                                class="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl mono text-sm text-white outline-none appearance-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black text-slate-500 uppercase">Zulu Time (UTC)</label>
+                            <input type="time" id="convZuluTime"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mono text-sm outline-none focus:border-blue-600">
+                        </div>
+                    </div>
+                    <div id="convResult" class="p-6 bg-emerald-900/10 border border-emerald-500/20 rounded-2xl hidden">
+                        <div class="flex flex-col items-center gap-3">
+                            <div class="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Calculated
+                                Destination Time</div>
+                            <div id="convResultTime" class="mono text-3xl font-black text-white tracking-tighter">
+                                --:--:--</div>
+                            <div id="convResultDate"
+                                class="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">---
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="performConversion()"
+                        class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/40">Calculate
+                        Local Time</button>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-900/80 border-t border-slate-800 text-center">
+                <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Automatic DST Handling Powered
+                    by IANA Database</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alliance Modal -->
+    <div id="allianceModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <h2 class="text-xl font-black text-slate-900 uppercase tracking-tighter">Global Alliance Partners</h2>
+                <button onclick="closeModal('allianceModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+            <div class="p-8 overflow-y-auto grid grid-cols-1 md:grid-cols-3 gap-8 custom-scroll">
+                <div>
+                    <h3
+                        class="text-blue-600 font-black text-xs uppercase tracking-widest mb-4 border-b-2 border-blue-50 pb-2">
+                        Oneworld Alliance</h3>
+                    <pre class="mono text-[10px] text-slate-600 leading-relaxed">AA - AMERICAN AIRLINES
+AS - ALASKA AIRLINES
+AT - ROYAL AIR MAROC
+AY - FINNAIR
+BA - BRITISH AIRWAYS
+CX - CATHAY PACIFIC
+IB - IBERIA
+JL - JAPAN AIRLINES
+MH - MALAYSIA AIRLINES
+QF - QANTAS AIRWAYS
+QR - QATAR AIRWAYS
+RJ - ROYAL JORDANIAN
+UL - SRILANKAN AIRLINES
+FJ - FIJI AIRWAYS
+WY - OMAN AIR</pre>
+                </div>
+                <div>
+                    <h3
+                        class="text-emerald-600 font-black text-xs uppercase tracking-widest mb-4 border-b-2 border-emerald-50 pb-2">
+                        Star Alliance</h3>
+                    <pre class="mono text-[10px] text-slate-600 leading-relaxed">A3 - AEGEAN AIRLINES
+AC - AIR CANADA
+AI - AIR INDIA
+AV - AVIANCA
+BR - EVA AIR
+CA - AIR CHINA
+CM - COPA AIRLINES
+ET - ETHIOPIAN AIRLINES
+LH - LUFTHANSA
+LO - LOT POLISH AIRLINES
+LX - SWISS INT. AIR LINES
+MS - EGYPTAIR
+NH - ALL NIPPON AIRWAYS
+NZ - AIR NEW ZEALAND
+OS - AUSTRIAN AIRLINES
+OU - CROATIA AIRLINES
+OZ - ASIANA AIRLINES
+SA - SOUTH AFRICAN
+SN - BRUSSELS AIRLINES
+SQ - SINGAPORE AIRLINES
+TG - THAI AIRWAYS
+TK - TURKISH AIRLINES
+TP - TAP PORTUGAL
+UA - UNITED AIRLINES
+ZH - SHENZHEN AIRLINES</pre>
+                </div>
+                <div>
+                    <h3
+                        class="text-sky-500 font-black text-xs uppercase tracking-widest mb-4 border-b-2 border-sky-50 pb-2">
+                        SkyTeam Alliance</h3>
+                    <pre class="mono text-[10px] text-slate-600 leading-relaxed">AF - AIR FRANCE
+AM - AEROMEXICO
+AR - AEROLINEAS ARGENTINAS
+AZ - ALITALIA / ITA
+CI - CHINA AIRLINES
+DL - DELTA AIR LINES
+GA - GARUDA INDONESIA
+KE - KOREAN AIR
+KL - KLM ROYAL Dutch
+KQ - KENYA AIRWAYS
+ME - MIDDLE EAST AIRLINES
+MF - XIAMEN AIRLINES
+MU - CHINA EASTERN
+RO - TAROM
+SK - SCANDINAVIAN
+SU - AEROFLOT</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IATA Registry Modal -->
+    <div id="iataModal" class="modal-overlay" onclick="closeOnOutsideClick(event)">
+        <div class="bg-white w-full max-w-2xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+            onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                <h2 class="text-xl font-black text-slate-900 uppercase tracking-tighter">IATA Registry Reference</h2>
+                <button onclick="closeModal('iataModal')"
+                    class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors">✕</button>
+            </div>
+            <div class="p-8 overflow-y-auto custom-scroll space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-50 p-4 rounded-xl border">
+                        <p class="text-[9px] text-blue-600 font-bold uppercase mb-1">VALC Canada</p>
+                        <p class="mono text-sm font-bold text-slate-800">YKXC42100 | 69567735</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border">
+                        <p class="text-[9px] text-blue-600 font-bold uppercase mb-1">VALC USA</p>
+                        <p class="mono text-sm font-bold text-slate-800">ATL1S211S | 11569902</p>
+                    </div>
+                </div>
+                <div class="space-y-2 pt-4">
+                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2">Extended
+                        Registry</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3 bg-white border rounded-lg flex justify-between items-center"><span
+                                class="font-bold text-slate-500">Skybird (DTW1S218C)</span><span
+                                class="mono font-bold text-slate-900">23854526</span></div>
+                        <div class="p-3 bg-white border rounded-lg flex justify-between items-center"><span
+                                class="font-bold text-slate-500">Downtown (FLL1S21CD)</span><span
+                                class="mono font-bold text-slate-900">10729143</span></div>
+                        <div class="p-3 bg-white border rounded-lg flex justify-between items-center"><span
+                                class="font-bold text-slate-500">Alio (YULC4212L)</span><span
+                                class="mono font-bold text-slate-900">69505903</span></div>
+                        <div class="p-3 bg-white border rounded-lg flex justify-between items-center"><span
+                                class="font-bold text-slate-500">YTOC421CV</span><span
+                                class="mono font-bold text-slate-900">67505524</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="w-72 bg-slate-900 text-white flex flex-col p-6 shrink-0 h-full overflow-hidden">
+        <div class="flex items-center gap-3 mb-8 shrink-0">
+            <div
+                class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/50 p-1.5">
+                <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15 80 L40 20 L50 45 L60 20 L85 80" stroke="#2563eb" stroke-width="12"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M10 88 L90 88" stroke="#0f172a" stroke-width="4" stroke-linecap="round" />
+                </svg>
+            </div>
+            <div>
+                <h2 class="font-extrabold text-sm tracking-tighter uppercase">Agents.Support</h2>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Global Terminal</p>
+            </div>
+        </div>
+
+        <div class="flex-1 space-y-6 overflow-y-auto custom-scroll pr-2">
+            <div>
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4">Agency
+                    Lines</span>
+                <div class="space-y-3 bg-blue-900/20 p-3 rounded-xl border border-blue-500/20">
+                    <div>
+                        <p class="text-[9px] text-blue-400 font-bold uppercase">JustFly Support</p>
+                        <p class="mono text-[11px] text-white cursor-pointer hover:text-blue-300"
+                            onclick="copyToClipboard('1-800-717-5015')">1-800-717-5015</p>
+                    </div>
+                    <div>
+                        <p class="text-[9px] text-blue-400 font-bold uppercase">FlightHub Support</p>
+                        <p class="mono text-[11px] text-white cursor-pointer hover:text-blue-300"
+                            onclick="copyToClipboard('1-800-900-1431')">1-800-900-1431</p>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-4">Productivity
+                    Tools</span>
+                <div class="space-y-2">
+                    <button onclick="openModal('availabilityModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-emerald-600 text-white border border-blue-500/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-blue-900/20">
+                        <span>Get Availability</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                    </button>
+
+                    <button onclick="openModal('noteModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-emerald-600 text-white border border-emerald-500/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-emerald-900/20">
+                        <span>Note Generator</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </button>
+                    <button onclick="openModal('airlineRequestModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-indigo-900 text-white border border-blue-500/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-blue-900/20">
+                        <span>Airline Requests</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </button>
+                    <button onclick="openModal('srDocsModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-emerald-600 text-white border border-purple-500/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-purple-900/20">
+                        <span>Advance Passenger Info</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path
+                                d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                        </svg>
+                    </button>
+
+                    <button onclick="openModal('fxdExpertModal')" class="hidden"></button>
+                    <!-- Placeholder to maintain IDs if needed -->
+
+                    <button onclick="openModal('fxdModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-emerald-600 text-white border border-blue-400/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-blue-900/20">
+                        <span>FXD Expert</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="3">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </button>
+
+                    <button onclick="openModal('emdModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-emerald-600 text-white border border-indigo-400/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-indigo-900/20">
+                        <span>EMD Builder</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                        </svg>
+                    </button>
+
+                    <a href="pnr-expert.html"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-purple-600 text-white border border-blue-500/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-blue-900/20">
+                        <span>PNR Expert</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="3">
+                            <path d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                    </a>
+                    <button onclick="openModal('airportTimeModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-slate-900 border border-blue-500/30 hover:border-blue-500 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg">
+                        <span class="text-blue-400">Airport Time & Zulu</span>
+                        <svg class="text-blue-500" width="14" height="14" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor" stroke-width="2.5">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+                    <button onclick="openModal('allianceModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold border border-slate-700 transition-all">
+                        <span class="text-slate-300">Check Alliances</span>
+                        <svg class="text-slate-500" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M12 2v20M2 12h20" />
+                        </svg>
+                    </button>
+                    <button onclick="openModal('iataModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold border border-slate-700 transition-all">
+                        <span class="text-slate-300">Check IATA Registry</span>
+                        <svg class="text-slate-500" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" />
+                        </svg>
+                    </button>
+                    <button onclick="openModal('breakModal')"
+                        class="w-full text-left flex items-center justify-between group p-3 rounded-xl bg-blue-700 text-white border border-blue-500/20 hover:brightness-110 transition-all text-xs font-bold uppercase tracking-tighter shadow-lg shadow-blue-900/20">
+                        <span>Break Reschedule</span>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+                    <div onclick="document.getElementById('quickCalcInput').focus()"
+                        class="bg-slate-800 p-4 rounded-2xl border border-slate-700 mt-4 shadow-inner cursor-pointer hover:border-slate-600 transition-all group">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] text-slate-400 font-black uppercase tracking-widest">Quick
+                                Calculator</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="3" class="text-slate-500 group-hover:text-blue-400 transition-colors">
+                                <rect x="4" y="2" width="16" height="20" rx="2" />
+                                <path d="M8 6h8M8 10h8M8 14h2M12 14h4M8 18h2M12 18h4" />
+                            </svg>
+                        </div>
+                        <input type="text" id="quickCalcInput" placeholder="22+22"
+                            class="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-sm text-white mono outline-none focus:border-blue-500 transition-colors text-center font-bold"
+                            oninput="calculateQuick()">
+                        <div id="quickCalcResult"
+                            class="mt-3 text-sm font-black text-blue-400 mono truncate min-h-[20px] text-center bg-slate-900/50 py-1 rounded-lg">
+                            Result: -</div>
+                        <p class="text-[8px] text-slate-500 font-bold uppercase mt-2 text-center tracking-tighter">Press
+                            Enter to Copy & Reset</p>
+
+                        <!-- History Container -->
+                        <div id="calcHistory" class="mt-3 space-y-1 pt-3 border-t border-slate-700/50 hidden"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="pt-6 border-t border-slate-800 shrink-0">
+            <div class="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                TERMINAL CONNECTED
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 flex flex-col bg-slate-50/50 h-full overflow-hidden">
+        <div class="p-8 pb-4">
+            <div
+                class="search-bar flex items-center bg-white rounded-2xl border border-slate-200 p-2 transition-all shadow-sm">
+                <div class="pl-4 pr-3 text-slate-400">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                </div>
+                <input type="text" id="searchInput" placeholder="Search airline or code..."
+                    class="flex-1 bg-transparent border-none outline-none py-3 text-sm font-medium">
+                <div class="px-4">
+                    <span id="resultCount"
+                        class="mono text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">00</span>
+                </div>
+            </div>
+        </div>
+        <div id="listContainer" class="flex-1 overflow-y-auto px-8 pb-8 space-y-4 custom-scroll"></div>
+    </div>
+
+
+    <script src="./data/airports.js"></script>
+    <script src="./data/airlines.js"></script>
+    <script src="./utils/clipboard.js"></script>
+    <script src="./utils/modal.js"></script>
+    <script src="./components/notepad.js"></script>
+    <script src="./components/fxd.js"></script>
+    <script src="./components/requests.js"></script>
+    <script src="./components/clocks.js"></script>
+    <script src="./components/breaks.js"></script>
+    <script src="./components/casenotes.js"></script>
+    <script src="./components/list.js"></script>
+    <script src="./components/calcsaver.js"></script>
+    <script src="./components/Availability.js"></script>
+    <script src="./components/srdocs.js"></script>
+    <script src="./components/emdmaker.js"></script>
+    <script src="./main.js"></script>
+    <script>
+        // Ensure EMD listeners are attached when DOM is ready
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof initEMD === 'function') {
+                initEMD();
+            }
+        });
+    </script>
+</body>
+
+</html>
